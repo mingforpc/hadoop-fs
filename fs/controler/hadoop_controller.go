@@ -14,6 +14,7 @@ const (
 	LISTSTATUS_BATCH = "LISTSTATUS_BATCH"
 	GETFILESTATUS    = "GETFILESTATUS"
 	READ             = "OPEN"
+	MKDIRS           = "MKDIRS"
 )
 
 var _default_buffersize = 4096
@@ -24,12 +25,14 @@ type HadoopController struct {
 	host  string
 	port  int
 
+	username string
+
 	httpPrefix string
 
 	inited bool
 }
 
-func (hadoop *HadoopController) Init(ssl bool, host string, port int) {
+func (hadoop *HadoopController) Init(ssl bool, host string, port int, username string) {
 
 	hadoop.isSSL = ssl
 	if ssl {
@@ -40,13 +43,19 @@ func (hadoop *HadoopController) Init(ssl bool, host string, port int) {
 
 	hadoop.host = host
 	hadoop.port = port
+	hadoop.username = username
 
 	hadoop.inited = true
 
 }
 
 func (hadoop *HadoopController) urlJoin(path, op string) string {
-	url := fmt.Sprintf("%s://%s:%d/webhdfs/v1%s?op=%s", hadoop.httpPrefix, hadoop.host, hadoop.port, path, op)
+	var url string
+	if hadoop.username != "" {
+		url = fmt.Sprintf("%s://%s:%d/webhdfs/v1%s?user.name=%s&op=%s", hadoop.httpPrefix, hadoop.host, hadoop.port, path, hadoop.username, op)
+	} else {
+		url = fmt.Sprintf("%s://%s:%d/webhdfs/v1%s?op=%s", hadoop.httpPrefix, hadoop.host, hadoop.port, path, op)
+	}
 
 	return url
 }
@@ -146,7 +155,6 @@ func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileM
 	}
 
 	fileStatus := GetFileStatus{}
-	fmt.Printf("\n %s \n", buf.Bytes())
 	err = json.Unmarshal(buf.Bytes(), &fileStatus)
 
 	if err != nil {
@@ -173,8 +181,6 @@ func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint
 	}
 	url = urlAddParam(url, "length", strconv.FormatInt(int64(length), 10))
 	url = urlAddParam(url, "buffersize", strconv.Itoa(buffersize))
-
-	fmt.Println(url)
 
 	resp, err := http.Get(url)
 
@@ -208,6 +214,58 @@ func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint
 	content = buf.Bytes()
 
 	return content, err
+}
+
+func (hadoop *HadoopController) MakeDir(pathname, permission string) (result bool, err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(pathname, MKDIRS)
+
+	if permission != "" {
+		url = urlAddParam(url, "permission", permission)
+	}
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(NO_FOUND)
+		case 403:
+			panic(EOF)
+		default:
+			panic(exception)
+		}
+	}
+
+	mkdirRes := MkdirResp{}
+	err = json.Unmarshal(buf.Bytes(), &mkdirRes)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return mkdirRes.Boolean, err
 }
 
 func urlAddParam(url, name, val string) string {

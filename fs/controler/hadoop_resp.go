@@ -50,3 +50,7 @@ type RemoteException struct {
 	JavaClassName string `json:"javaClassName"`
 	Message       string `json:"message"`
 }
+
+type MkdirResp struct {
+	Boolean bool `json:"boolean"`
+}

@@ -5,8 +5,10 @@ import (
 	"hadoop-fs/fs/config"
 	"hadoop-fs/fs/controler"
 	"hadoop-fs/fs/logger"
+	"hadoop-fs/fs/util"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/mingforpc/fuse-go/fuse"
@@ -50,7 +52,7 @@ var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32
 	return errno.SUCCESS
 }
 
-var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (int32, []kernel.FuseDirent) {
+var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) ([]kernel.FuseDirent, int32) {
 
 	path := PATH_MANAGER.Get(nodeid)
 
@@ -114,7 +116,7 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 		}
 	}
 
-	return errno.SUCCESS, fileList
+	return fileList, errno.SUCCESS
 
 }
 
@@ -128,12 +130,7 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.
 
 	parentPath := PATH_MANAGER.Get(parentId)
 
-	var filePath string
-	if parentPath != "" && parentPath[len(parentPath)-1] != '/' {
-		filePath = parentPath + "/" + name
-	} else {
-		filePath = parentPath + name
-	}
+	filePath := util.MergePath(parentPath, name)
 
 	if NOT_EXIST_FILE_CACHE.IsNotExist(filePath) == false {
 		// 文件不存在
@@ -186,10 +183,42 @@ var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi 
 	return content, errno.SUCCESS
 }
 
+var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (*fuse.FuseStat, int32) {
+
+	path := PATH_MANAGER.Get(parentid)
+	filePath := util.MergePath(path, name)
+
+	modeStr := strconv.FormatInt(int64(mode), 8)
+
+	result, err := HADOOP.MakeDir(filePath, modeStr)
+
+	if err != nil || !result {
+		logger.Error.Println(err)
+		return nil, errno.ENOSYS
+	}
+
+	file, err := HADOOP.GetFileStatus(filePath)
+
+	if err != nil || !result {
+		logger.Error.Println(err)
+		return nil, errno.ENOSYS
+	}
+
+	stat := fuse.FuseStat{}
+
+	file.AdjustNormal()
+	file.WriteToStat(&stat.Stat)
+
+	stat.Nodeid = uint64(file.StIno)
+	stat.Generation = 1
+
+	return &stat, errno.SUCCESS
+}
+
 func Service(cg config.Config) {
 
 	HADOOP = controler.HadoopController{}
-	HADOOP.Init(false, cg.Hadoop.Host, cg.Hadoop.Port)
+	HADOOP.Init(false, cg.Hadoop.Host, cg.Hadoop.Port, cg.Hadoop.Username)
 
 	NOT_EXIST_FILE_CACHE = cache.NotExistCache{}
 	NOT_EXIST_FILE_CACHE.Init()
@@ -205,6 +234,7 @@ func Service(cg config.Config) {
 	opts.Lookup = &lookup
 	opts.Open = &open
 	opts.Read = &read
+	opts.Mkdir = &mkdir
 
 	se := fuse.FuseSession{}
 

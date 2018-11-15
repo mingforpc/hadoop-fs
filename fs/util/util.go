@@ -28,3 +28,14 @@ func GetFileName(path string) string {
 		return path
 	}
 }
+
+func MergePath(parent, file string) string {
+	var filePath string
+	if parent != "" && parent[len(parent)-1] != '/' {
+		filePath = parent + "/" + file
+	} else {
+		filePath = parent + file
+	}
+
+	return filePath
+}
