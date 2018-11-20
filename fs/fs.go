@@ -8,7 +8,6 @@ import (
 	"hadoop-fs/fs/util"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/mingforpc/fuse-go/fuse"
@@ -188,11 +187,17 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (*
 	path := PATH_MANAGER.Get(parentid)
 	filePath := util.MergePath(path, name)
 
-	modeStr := strconv.FormatInt(int64(mode), 8)
+	modeStr := util.ModeToStr(mode)
 
 	result, err := HADOOP.MakeDir(filePath, modeStr)
 
-	if err != nil || !result {
+	if err == controler.EACCES {
+		// 没权限
+		logger.Error.Println(err)
+		return nil, errno.EACCES
+
+	} else if err != nil || !result {
+		// 其他错误
 		logger.Error.Println(err)
 		return nil, errno.ENOSYS
 	}
@@ -211,6 +216,55 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (*
 
 	stat.Nodeid = uint64(file.StIno)
 	stat.Generation = 1
+
+	// 加入到路径的缓存
+	PATH_MANAGER.Insert(stat.Nodeid, filePath)
+
+	return &stat, errno.SUCCESS
+}
+
+var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, fi *fuse.FuseFileInfo) (*fuse.FuseStat, int32) {
+
+	logger.Trace.Printf(" parentid[%d], name[%s], mode[%d], fi[%+v] \n", parentid, name, mode, fi)
+
+	path := PATH_MANAGER.Get(parentid)
+
+	if path == "" {
+		// 父目录不在路径缓存中
+		return nil, errno.ENOENT
+	}
+
+	filePath := util.MergePath(path, name)
+
+	modeStr := util.ModeToStr(mode)
+
+	err := HADOOP.Create(filePath, modeStr)
+
+	if err == controler.EEXIST {
+		return nil, errno.EEXIST
+	} else if err == controler.EACCES {
+		return nil, errno.EACCES
+	} else if err != nil {
+		return nil, errno.ENOENT
+	}
+
+	file, err := HADOOP.GetFileStatus(filePath)
+
+	if err != nil {
+		logger.Error.Println(err)
+		return nil, errno.ENOSYS
+	}
+
+	stat := fuse.FuseStat{}
+
+	file.AdjustNormal()
+	file.WriteToStat(&stat.Stat)
+
+	stat.Nodeid = uint64(file.StIno)
+	stat.Generation = 1
+
+	// 加入到路径的缓存
+	PATH_MANAGER.Insert(stat.Nodeid, filePath)
 
 	return &stat, errno.SUCCESS
 }
@@ -235,6 +289,7 @@ func Service(cg config.Config) {
 	opts.Open = &open
 	opts.Read = &read
 	opts.Mkdir = &mkdir
+	opts.Create = &create
 
 	se := fuse.FuseSession{}
 

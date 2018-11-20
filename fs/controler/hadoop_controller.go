@@ -15,6 +15,7 @@ const (
 	GETFILESTATUS    = "GETFILESTATUS"
 	READ             = "OPEN"
 	MKDIRS           = "MKDIRS"
+	CREATE           = "CREATE"
 )
 
 var _default_buffersize = 4096
@@ -60,6 +61,7 @@ func (hadoop *HadoopController) urlJoin(path, op string) string {
 	return url
 }
 
+// 列出目录下的文件
 func (hadoop *HadoopController) List(path, startAfter string) (fileList []model.FileModel, remain int, err error) {
 
 	defer func() {
@@ -122,6 +124,7 @@ func recoverError(exception *error) {
 	}
 }
 
+// 获取文件信息
 func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileModel, err error) {
 
 	defer recoverError(&err)
@@ -166,6 +169,7 @@ func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileM
 	return file, err
 }
 
+// 读取文件内容
 func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint32, buffersize int) (content []byte, err error) {
 	defer recoverError(&err)
 
@@ -216,6 +220,7 @@ func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint
 	return content, err
 }
 
+// 创建目录
 func (hadoop *HadoopController) MakeDir(pathname, permission string) (result bool, err error) {
 	defer recoverError(&err)
 
@@ -249,10 +254,8 @@ func (hadoop *HadoopController) MakeDir(pathname, permission string) (result boo
 			panic(err)
 		}
 		switch resp.StatusCode {
-		case 404:
-			panic(NO_FOUND)
 		case 403:
-			panic(EOF)
+			panic(EACCES)
 		default:
 			panic(exception)
 		}
@@ -266,6 +269,53 @@ func (hadoop *HadoopController) MakeDir(pathname, permission string) (result boo
 	}
 
 	return mkdirRes.Boolean, err
+}
+
+// 创建文件
+func (hadoop *HadoopController) Create(filepath, permission string) (err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, CREATE)
+
+	if permission != "" {
+		url = urlAddParam(url, "permission", permission)
+	}
+	url = urlAddParam(url, "overwrite", "false")
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 201 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+		if err != nil {
+			panic(err)
+		}
+		switch exception.Error() {
+		case "AccessControlException":
+			panic(EACCES)
+		case "FileAlreadyExistsException":
+			panic(EEXIST)
+		default:
+			panic(exception)
+		}
+	}
+
+	return err
 }
 
 func urlAddParam(url, name, val string) string {
