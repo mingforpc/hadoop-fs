@@ -46,6 +46,14 @@ func (cache *NotExistCache) Insert(filepath string, negativeTimeout int) {
 
 }
 
+func (cache *NotExistCache) Delete(filepath string) {
+
+	cache.lk.Lock()
+	delete(cache.dict, filepath)
+	cache.lk.Unlock()
+
+}
+
 // if filepath is not exist in cache(so you may test file is exist), return true
 // else return false
 func (cache *NotExistCache) IsNotExist(filepath string) bool {

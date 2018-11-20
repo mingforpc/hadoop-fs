@@ -16,6 +16,7 @@ const (
 	READ             = "OPEN"
 	MKDIRS           = "MKDIRS"
 	CREATE           = "CREATE"
+	SETTIMES         = "SETTIMES"
 )
 
 var _default_buffersize = 4096
@@ -310,6 +311,49 @@ func (hadoop *HadoopController) Create(filepath, permission string) (err error) 
 			panic(EACCES)
 		case "FileAlreadyExistsException":
 			panic(EEXIST)
+		default:
+			panic(exception)
+		}
+	}
+
+	return err
+}
+
+// 设置文件Mtime和Atime，-1表示不变
+func (hadoop *HadoopController) ModificationTime(filepath string, mtime, atime int64) (err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, SETTIMES)
+
+	url = urlAddParam(url, "modificationtime", strconv.FormatInt(mtime, 10))
+	url = urlAddParam(url, "accesstime", strconv.FormatInt(atime, 10))
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+		if err != nil {
+			panic(err)
+		}
+		switch exception.Error() {
+		case "AccessControlException":
+			panic(EACCES)
 		default:
 			panic(exception)
 		}

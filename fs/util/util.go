@@ -46,3 +46,15 @@ func ModeToStr(mode uint32) string {
 	mode = mode & 0x0777
 	return strconv.FormatInt(int64(mode), 8)
 }
+
+// 纳秒 转 毫秒
+func NsToMs(ns int64) int64 {
+
+	return ns / 1000000
+
+}
+
+// 毫秒 转 纳秒
+func MsToNs(ms int64) int64 {
+	return ms * 1000000
+}

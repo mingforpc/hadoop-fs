@@ -24,6 +24,8 @@ var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) int32 
 
 	path := PATH_MANAGER.Get(nodeid)
 
+	logger.Trace.Printf("getattr: path[%s] \n", path)
+
 	if path == "/" {
 
 		rootfile := controler.ROOT.GetRoot(req)
@@ -54,6 +56,8 @@ var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32
 var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) ([]kernel.FuseDirent, int32) {
 
 	path := PATH_MANAGER.Get(nodeid)
+
+	logger.Trace.Printf("readdir: path[%s] \n", path)
 
 	var fileList []kernel.FuseDirent = make([]kernel.FuseDirent, 0)
 
@@ -119,15 +123,22 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 
 }
 
-var releasedir = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) int32 {
+var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) int32 {
+
+	path := PATH_MANAGER.Get(nodeid)
+
+	if path != "/" {
+		logger.Trace.Printf("release: nodeid[%d], path[%s]\n", nodeid, path)
+	}
+
 	return errno.SUCCESS
 }
 
 var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.Stat_t, generation *uint64) int32 {
 
-	logger.Trace.Printf("parentId[%d], name[%s]\n", parentId, name)
-
 	parentPath := PATH_MANAGER.Get(parentId)
+
+	logger.Trace.Printf("parentId[%d], parentPath[%s], name[%s]\n", parentId, parentPath, name)
 
 	filePath := util.MergePath(parentPath, name)
 
@@ -219,6 +230,8 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (*
 
 	// 加入到路径的缓存
 	PATH_MANAGER.Insert(stat.Nodeid, filePath)
+	// 删除不存在文件缓存
+	NOT_EXIST_FILE_CACHE.Delete(filePath)
 
 	return &stat, errno.SUCCESS
 }
@@ -266,7 +279,54 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 	// 加入到路径的缓存
 	PATH_MANAGER.Insert(stat.Nodeid, filePath)
 
+	// 删除不存在文件缓存
+	NOT_EXIST_FILE_CACHE.Delete(filePath)
+
 	return &stat, errno.SUCCESS
+}
+
+var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet uint32) int32 {
+
+	logger.Trace.Printf("nodeid[%d], attr[%+v], toSet[%d]\n", nodeid, attr, toSet)
+
+	filepath := PATH_MANAGER.Get(nodeid)
+
+	if filepath == "" {
+		// 文件不在路径缓存中
+		return errno.ENOENT
+	}
+
+	var atime int64 = -1
+	var mtime int64 = -1
+
+	if toSet&fuse.FUSE_SET_ATTR_ATIME > 0 {
+		// 设置文件atime
+
+		atime = util.NsToMs(syscall.TimespecToNsec(attr.Atim))
+	}
+	if toSet&fuse.FUSE_SET_ATTR_MTIME > 0 {
+		// 设置文件mtime
+		mtime = util.NsToMs(syscall.TimespecToNsec(attr.Mtim))
+	}
+
+	if atime > 0 || mtime > 0 {
+
+		err := HADOOP.ModificationTime(filepath, atime, mtime)
+
+		if err == controler.EACCES {
+			return errno.EACCES
+		} else if err != nil {
+			return errno.ENOENT
+		}
+
+	}
+
+	logger.Trace.Printf("atime[%d], mtime[%d] \n", atime, mtime)
+
+	// 由于Hadoop中没有ctime所以忽略
+	// 忽略UID, GID，因为由启动的参数决定的
+
+	return errno.SUCCESS
 }
 
 func Service(cg config.Config) {
@@ -284,12 +344,14 @@ func Service(cg config.Config) {
 	opts.Getattr = &getattr
 	opts.Opendir = &opendir
 	opts.Readdir = &readdir
-	opts.Releasedir = &releasedir
+	opts.Releasedir = &release
+	opts.Release = &release
 	opts.Lookup = &lookup
 	opts.Open = &open
 	opts.Read = &read
 	opts.Mkdir = &mkdir
 	opts.Create = &create
+	opts.Setattr = &setattr
 
 	se := fuse.FuseSession{}
 

@@ -1,6 +1,7 @@
 package model
 
 import (
+	"hadoop-fs/fs/util"
 	"os/user"
 	"strconv"
 	"syscall"
@@ -62,9 +63,10 @@ func (file *FileModel) WriteToStat(stat *syscall.Stat_t) {
 	stat.Ctim = syscall.NsecToTimespec(file.StCtime)
 }
 
+// 当FileModel是由 WebHDFS 接口获取时，需要调用该接口对部分属性进行转换
 func (file *FileModel) AdjustNormal() {
 
-	file.StMtime *= 1000000
+	file.StMtime = util.MsToNs(file.StMtime)
 
 	switch file.HadoopType {
 	case HADOOP_DIR:
