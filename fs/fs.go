@@ -43,6 +43,7 @@ func Service(cg config.Config) {
 	opts.Setattr = &setattr
 	opts.Write = &write
 	opts.Unlink = &unlink
+	opts.Rmdir = &rmdir
 
 	se := fuse.FuseSession{}
 

@@ -392,9 +392,7 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 	return size, errno.SUCCESS
 }
 
-// 删除文件函数
-var unlink = func(req fuse.FuseReq, parentid uint64, name string) (result int32) {
-
+func _rmFileOrDir(req fuse.FuseReq, parentid uint64, name string) (result int32) {
 	defer recoverError(&result)
 
 	parentPath := PATH_MANAGER.Get(parentid)
@@ -419,4 +417,14 @@ var unlink = func(req fuse.FuseReq, parentid uint64, name string) (result int32)
 	PATH_MANAGER.Delete(uint64(file.StIno))
 
 	return errno.SUCCESS
+}
+
+// 删除文件函数
+var unlink = func(req fuse.FuseReq, parentid uint64, name string) (result int32) {
+	return _rmFileOrDir(req, parentid, name)
+}
+
+// 删除文件夹函数
+var rmdir = func(req fuse.FuseReq, parentid uint64, name string) (result int32) {
+	return _rmFileOrDir(req, parentid, name)
 }
