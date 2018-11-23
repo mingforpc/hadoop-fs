@@ -4,6 +4,7 @@ import (
 	"hadoop-fs/fs/cache"
 	"hadoop-fs/fs/config"
 	"hadoop-fs/fs/controler"
+	herr "hadoop-fs/fs/controler/hadoop_error"
 	"hadoop-fs/fs/logger"
 	"hadoop-fs/fs/util"
 	"os"
@@ -20,7 +21,26 @@ var PATH_MANAGER = cache.FusePathManager{}
 var HADOOP controler.HadoopController
 var NOT_EXIST_FILE_CACHE cache.NotExistCache
 
-var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) int32 {
+// 统一的错误处理
+func recoverError(res *int32) {
+	if err := recover(); err != nil {
+		switch err {
+		case herr.NO_FOUND:
+			*res = errno.ENOENT
+		case herr.EEXIST:
+			*res = errno.EEXIST
+		case herr.EACCES:
+			*res = errno.ENOENT
+		default:
+			*res = errno.ENOSYS
+		}
+
+	}
+}
+
+var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) (result int32) {
+
+	defer recoverError(&result)
 
 	path := PATH_MANAGER.Get(nodeid)
 
@@ -37,7 +57,7 @@ var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) int32 
 		file, err := HADOOP.GetFileStatus(path)
 
 		if err != nil {
-			return errno.ENOENT
+			panic(err)
 		}
 
 		file.AdjustNormal()
@@ -45,7 +65,9 @@ var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) int32 
 
 	}
 
-	return errno.SUCCESS
+	result = errno.SUCCESS
+
+	return result
 }
 
 var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
@@ -53,13 +75,15 @@ var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32
 	return errno.SUCCESS
 }
 
-var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) ([]kernel.FuseDirent, int32) {
+var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (fileList []kernel.FuseDirent, result int32) {
+
+	defer recoverError(&result)
 
 	path := PATH_MANAGER.Get(nodeid)
 
 	logger.Trace.Printf("readdir: path[%s] \n", path)
 
-	var fileList []kernel.FuseDirent = make([]kernel.FuseDirent, 0)
+	fileList = make([]kernel.FuseDirent, 0)
 
 	// 记录fileList中的文件数量
 	fileCount := uint32(0)
@@ -119,11 +143,15 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 		}
 	}
 
-	return fileList, errno.SUCCESS
+	result = errno.SUCCESS
+
+	return fileList, result
 
 }
 
-var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) int32 {
+var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) (result int32) {
+
+	defer recoverError(&result)
 
 	path := PATH_MANAGER.Get(nodeid)
 
@@ -131,10 +159,13 @@ var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) int32 
 		logger.Trace.Printf("release: nodeid[%d], path[%s]\n", nodeid, path)
 	}
 
-	return errno.SUCCESS
+	result = errno.SUCCESS
+	return result
 }
 
-var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.Stat_t, generation *uint64) int32 {
+var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.Stat_t, generation *uint64) (result int32) {
+
+	defer recoverError(&result)
 
 	parentPath := PATH_MANAGER.Get(parentId)
 
@@ -144,7 +175,8 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.
 
 	if NOT_EXIST_FILE_CACHE.IsNotExist(filePath) == false {
 		// 文件不存在
-		return errno.ENOENT
+		panic(herr.NO_FOUND)
+		// return errno.ENOENT
 	}
 
 	file, err := HADOOP.GetFileStatus(filePath)
@@ -152,7 +184,8 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.
 	if err != nil {
 		// 不存在的文件会缓存 NOT_EXIST_FILE_CACHE 中的秒数
 		NOT_EXIST_FILE_CACHE.Insert(filePath, NOT_EXIST_FILE_CACHE.NegativeTimeout)
-		return errno.ENOENT
+		// return errno.ENOENT
+		panic(herr.NO_FOUND)
 	}
 
 	file.AdjustNormal()
@@ -164,7 +197,8 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.
 	// TODO:
 	*generation = 1
 
-	return errno.SUCCESS
+	result = errno.SUCCESS
+	return result
 }
 
 var open = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
@@ -172,7 +206,9 @@ var open = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
 	return errno.SUCCESS
 }
 
-var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) ([]byte, int32) {
+var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (content []byte, result int32) {
+
+	defer recoverError(&result)
 
 	path := PATH_MANAGER.Get(nodeid)
 
@@ -185,42 +221,39 @@ var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi 
 
 	content, err := HADOOP.Read(path, offset, size, 0)
 
-	if err != nil && err != controler.EOF {
-		// TODO: 出错，暂时当文件不存在处理
-		return nil, errno.ENOENT
+	if err != nil && err != herr.EOF {
+		// TODO: 出错
+		panic(err)
 	}
 
-	return content, errno.SUCCESS
+	result = errno.SUCCESS
+	return content, result
 }
 
-var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (*fuse.FuseStat, int32) {
+var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (stat *fuse.FuseStat, result int32) {
+
+	defer recoverError(&result)
 
 	path := PATH_MANAGER.Get(parentid)
 	filePath := util.MergePath(path, name)
 
 	modeStr := util.ModeToStr(mode)
 
-	result, err := HADOOP.MakeDir(filePath, modeStr)
+	success, err := HADOOP.MakeDir(filePath, modeStr)
 
-	if err == controler.EACCES {
-		// 没权限
-		logger.Error.Println(err)
-		return nil, errno.EACCES
-
-	} else if err != nil || !result {
-		// 其他错误
-		logger.Error.Println(err)
-		return nil, errno.ENOSYS
+	if err != nil {
+		panic(err)
+	} else if !success {
+		panic(herr.EACCES)
 	}
 
 	file, err := HADOOP.GetFileStatus(filePath)
 
-	if err != nil || !result {
-		logger.Error.Println(err)
-		return nil, errno.ENOSYS
+	if err != nil {
+		panic(err)
 	}
 
-	stat := fuse.FuseStat{}
+	stat = &fuse.FuseStat{}
 
 	file.AdjustNormal()
 	file.WriteToStat(&stat.Stat)
@@ -233,10 +266,12 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (*
 	// 删除不存在文件缓存
 	NOT_EXIST_FILE_CACHE.Delete(filePath)
 
-	return &stat, errno.SUCCESS
+	return stat, errno.SUCCESS
 }
 
-var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, fi *fuse.FuseFileInfo) (*fuse.FuseStat, int32) {
+var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, fi *fuse.FuseFileInfo) (stat *fuse.FuseStat, result int32) {
+
+	defer recoverError(&result)
 
 	logger.Trace.Printf(" parentid[%d], name[%s], mode[%d], fi[%+v] \n", parentid, name, mode, fi)
 
@@ -253,22 +288,17 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 
 	err := HADOOP.Create(filePath, modeStr)
 
-	if err == controler.EEXIST {
-		return nil, errno.EEXIST
-	} else if err == controler.EACCES {
-		return nil, errno.EACCES
-	} else if err != nil {
-		return nil, errno.ENOENT
+	if err != nil {
+		panic(err)
 	}
 
 	file, err := HADOOP.GetFileStatus(filePath)
 
 	if err != nil {
-		logger.Error.Println(err)
-		return nil, errno.ENOSYS
+		panic(err)
 	}
 
-	stat := fuse.FuseStat{}
+	stat = &fuse.FuseStat{}
 
 	file.AdjustNormal()
 	file.WriteToStat(&stat.Stat)
@@ -282,10 +312,12 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 	// 删除不存在文件缓存
 	NOT_EXIST_FILE_CACHE.Delete(filePath)
 
-	return &stat, errno.SUCCESS
+	return stat, errno.SUCCESS
 }
 
-var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet uint32) int32 {
+var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet uint32) (result int32) {
+
+	defer recoverError(&result)
 
 	logger.Trace.Printf("nodeid[%d], attr[%+v], toSet[%d]\n", nodeid, attr, toSet)
 
@@ -313,10 +345,8 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 
 		err := HADOOP.ModificationTime(filepath, atime, mtime)
 
-		if err == controler.EACCES {
-			return errno.EACCES
-		} else if err != nil {
-			return errno.ENOENT
+		if err != nil {
+			panic(err)
 		}
 
 	}
@@ -329,9 +359,9 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 	return errno.SUCCESS
 }
 
-var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi fuse.FuseFileInfo) (uint32, int32) {
+var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi fuse.FuseFileInfo) (size uint32, result int32) {
 
-	var size uint32 = 0
+	defer recoverError(&result)
 
 	filepath := PATH_MANAGER.Get(nodeid)
 
@@ -340,12 +370,7 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 	file, err := HADOOP.GetFileStatus(filepath)
 
 	if err != nil {
-		switch err {
-		case controler.NO_FOUND:
-			return size, errno.EEXIST
-		default:
-			return size, errno.ENOSYS
-		}
+		panic(err)
 	}
 
 	file.AdjustNormal()
@@ -355,25 +380,20 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 		err = HADOOP.AppendFile(filepath, buf)
 	} else {
 		// 先Truncate到offset的位置，再追加
-		res := false
-		res, err = HADOOP.TruncateFile(filepath, int64(offset))
+		success := false
+		success, err = HADOOP.TruncateFile(filepath, int64(offset))
 
-		if err == nil && res == false {
-			err = controler.EACCES
-		}
-
-		if err == nil {
+		if err != nil {
+			panic(err)
+		} else if !success {
+			panic(herr.EACCES)
+		} else {
 			err = HADOOP.AppendFile(filepath, buf)
 		}
 	}
 
 	if err != nil {
-		switch err {
-		case controler.EACCES:
-			return size, errno.EACCES
-		default:
-			return size, errno.ENOSYS
-		}
+		panic(err)
 	}
 
 	size = uint32(len(buf))

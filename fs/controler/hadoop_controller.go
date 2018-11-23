@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	herr "hadoop-fs/fs/controler/hadoop_error"
 	"hadoop-fs/fs/logger"
 	"hadoop-fs/fs/model"
 	"net/http"
@@ -99,7 +100,7 @@ func (hadoop *HadoopController) List(path, startAfter string) (fileList []model.
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(NO_FOUND)
+			panic(herr.NO_FOUND)
 		default:
 			panic(exception)
 		}
@@ -154,7 +155,7 @@ func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileM
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(NO_FOUND)
+			panic(herr.NO_FOUND)
 		default:
 			panic(exception)
 		}
@@ -209,9 +210,9 @@ func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(NO_FOUND)
+			panic(herr.NO_FOUND)
 		case 403:
-			panic(EOF)
+			panic(herr.EOF)
 		default:
 			panic(exception)
 		}
@@ -258,7 +259,7 @@ func (hadoop *HadoopController) MakeDir(pathname, permission string) (result boo
 		}
 		switch resp.StatusCode {
 		case 403:
-			panic(EACCES)
+			panic(herr.EACCES)
 		default:
 			panic(exception)
 		}
@@ -310,9 +311,9 @@ func (hadoop *HadoopController) Create(filepath, permission string) (err error) 
 		}
 		switch exception.Error() {
 		case "AccessControlException":
-			panic(EACCES)
+			panic(herr.EACCES)
 		case "FileAlreadyExistsException":
-			panic(EEXIST)
+			panic(herr.EEXIST)
 		default:
 			panic(exception)
 		}
@@ -355,7 +356,7 @@ func (hadoop *HadoopController) ModificationTime(filepath string, mtime, atime i
 		}
 		switch exception.Error() {
 		case "AccessControlException":
-			panic(EACCES)
+			panic(herr.EACCES)
 		default:
 			panic(exception)
 		}
@@ -391,7 +392,7 @@ func (hadoop *HadoopController) AppendFile(filepath string, content []byte) (err
 		}
 		switch exception.Error() {
 		case "AccessControlException":
-			panic(EACCES)
+			panic(herr.EACCES)
 		default:
 			panic(exception)
 		}
@@ -405,10 +406,7 @@ func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (
 	defer recoverError(&err)
 
 	url := hadoop.urlJoin(filepath, TRUNCATE)
-
 	url = urlAddParam(url, "newlength", strconv.FormatInt(newlength, 10))
-
-	fmt.Println(url)
 
 	resp, err := http.Post(url, "application/json", nil)
 
@@ -424,15 +422,15 @@ func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (
 	if resp.StatusCode != 200 {
 		exception := HadoopException{}
 		err = json.Unmarshal(buf.Bytes(), &exception)
-		fmt.Println(string(buf.Bytes()))
+
 		if err != nil {
 			panic(err)
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(EEXIST)
+			panic(herr.EEXIST)
 		case 403:
-			panic(EACCES)
+			panic(herr.EACCES)
 		default:
 			panic(exception)
 		}

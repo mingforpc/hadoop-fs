@@ -1,14 +1,8 @@
 package controler
 
 import (
-	"errors"
 	"hadoop-fs/fs/model"
 )
-
-var EOF = errors.New("End of file")
-var NO_FOUND = errors.New("File no found")
-var EEXIST = errors.New("File exists")
-var EACCES = errors.New("Permission denied")
 
 type FileStatuses struct {
 	FileStatuses []model.FileModel `json:"FileStatus"`
