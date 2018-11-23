@@ -17,6 +17,8 @@ const (
 	MKDIRS           = "MKDIRS"
 	CREATE           = "CREATE"
 	SETTIMES         = "SETTIMES"
+	APPEND           = "APPEND"
+	TRUNCATE         = "TRUNCATE"
 )
 
 var _default_buffersize = 4096
@@ -262,14 +264,14 @@ func (hadoop *HadoopController) MakeDir(pathname, permission string) (result boo
 		}
 	}
 
-	mkdirRes := MkdirResp{}
-	err = json.Unmarshal(buf.Bytes(), &mkdirRes)
+	booleanRes := BooleanResp{}
+	err = json.Unmarshal(buf.Bytes(), &booleanRes)
 
 	if err != nil {
 		panic(err)
 	}
 
-	return mkdirRes.Boolean, err
+	return booleanRes.Boolean, err
 }
 
 // 创建文件
@@ -360,6 +362,90 @@ func (hadoop *HadoopController) ModificationTime(filepath string, mtime, atime i
 	}
 
 	return err
+}
+
+// 追加文件内容
+func (hadoop *HadoopController) AppendFile(filepath string, content []byte) (err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, APPEND)
+
+	contentBuf := bytes.NewBuffer(content)
+
+	resp, err := http.Post(url, "application/octet-stream", contentBuf)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+		if err != nil {
+			panic(err)
+		}
+		switch exception.Error() {
+		case "AccessControlException":
+			panic(EACCES)
+		default:
+			panic(exception)
+		}
+	}
+
+	return err
+}
+
+// Truncate 文件
+func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (result bool, err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, TRUNCATE)
+
+	url = urlAddParam(url, "newlength", strconv.FormatInt(newlength, 10))
+
+	fmt.Println(url)
+
+	resp, err := http.Post(url, "application/json", nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+		fmt.Println(string(buf.Bytes()))
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(EEXIST)
+		case 403:
+			panic(EACCES)
+		default:
+			panic(exception)
+		}
+	}
+
+	booleanRes := BooleanResp{}
+	err = json.Unmarshal(buf.Bytes(), &booleanRes)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return booleanRes.Boolean, err
 }
 
 func urlAddParam(url, name, val string) string {

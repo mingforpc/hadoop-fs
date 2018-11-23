@@ -53,6 +53,6 @@ type RemoteException struct {
 	Message       string `json:"message"`
 }
 
-type MkdirResp struct {
+type BooleanResp struct {
 	Boolean bool `json:"boolean"`
 }

@@ -329,6 +329,58 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 	return errno.SUCCESS
 }
 
+var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi fuse.FuseFileInfo) (uint32, int32) {
+
+	var size uint32 = 0
+
+	filepath := PATH_MANAGER.Get(nodeid)
+
+	logger.Trace.Printf("nodeid[%d], filepath[%s], buf[%s], offset[%d], fi[%+v]\n", nodeid, filepath, buf, offset, fi)
+
+	file, err := HADOOP.GetFileStatus(filepath)
+
+	if err != nil {
+		switch err {
+		case controler.NO_FOUND:
+			return size, errno.EEXIST
+		default:
+			return size, errno.ENOSYS
+		}
+	}
+
+	file.AdjustNormal()
+
+	if offset == uint64(file.StSize) {
+		// 直接追加
+		err = HADOOP.AppendFile(filepath, buf)
+	} else {
+		// 先Truncate到offset的位置，再追加
+		res := false
+		res, err = HADOOP.TruncateFile(filepath, int64(offset))
+
+		if err == nil && res == false {
+			err = controler.EACCES
+		}
+
+		if err == nil {
+			err = HADOOP.AppendFile(filepath, buf)
+		}
+	}
+
+	if err != nil {
+		switch err {
+		case controler.EACCES:
+			return size, errno.EACCES
+		default:
+			return size, errno.ENOSYS
+		}
+	}
+
+	size = uint32(len(buf))
+
+	return size, errno.SUCCESS
+}
+
 func Service(cg config.Config) {
 
 	HADOOP = controler.HadoopController{}
@@ -352,6 +404,7 @@ func Service(cg config.Config) {
 	opts.Mkdir = &mkdir
 	opts.Create = &create
 	opts.Setattr = &setattr
+	opts.Write = &write
 
 	se := fuse.FuseSession{}
 
