@@ -20,6 +20,7 @@ const (
 	SETTIMES         = "SETTIMES"
 	APPEND           = "APPEND"
 	TRUNCATE         = "TRUNCATE"
+	DELETE           = "DELETE"
 )
 
 var _default_buffersize = 4096
@@ -409,6 +410,57 @@ func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (
 	url = urlAddParam(url, "newlength", strconv.FormatInt(newlength, 10))
 
 	resp, err := http.Post(url, "application/json", nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(herr.EEXIST)
+		case 403:
+			panic(herr.EACCES)
+		default:
+			panic(exception)
+		}
+	}
+
+	booleanRes := BooleanResp{}
+	err = json.Unmarshal(buf.Bytes(), &booleanRes)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return booleanRes.Boolean, err
+}
+
+// 删除文件或者目录
+func (hadoop *HadoopController) Delete(filepath string) (result bool, err error) {
+
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, DELETE)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil {
 		panic(err)
