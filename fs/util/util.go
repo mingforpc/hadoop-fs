@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -43,7 +44,10 @@ func MergePath(parent, file string) string {
 
 // 将文件的权限转换成字符串模式，比如:“777”
 func ModeToStr(mode uint32) string {
-	mode = mode & 0x1777
+
+	fmt.Println(strconv.FormatInt(int64(mode), 8))
+	mode = mode & 01777
+	fmt.Println(strconv.FormatInt(int64(mode), 8))
 	return strconv.FormatInt(int64(mode), 8)
 }
 

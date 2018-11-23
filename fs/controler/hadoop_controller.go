@@ -21,6 +21,7 @@ const (
 	APPEND           = "APPEND"
 	TRUNCATE         = "TRUNCATE"
 	DELETE           = "DELETE"
+	SETPERMISSION    = "SETPERMISSION"
 )
 
 var _default_buffersize = 4096
@@ -496,6 +497,50 @@ func (hadoop *HadoopController) Delete(filepath string) (result bool, err error)
 	}
 
 	return booleanRes.Boolean, err
+}
+
+// 设置文件权限
+func (hadoop *HadoopController) SetPermission(filepath, permission string) (err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, SETPERMISSION)
+	url = urlAddParam(url, "permission", permission)
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(herr.EEXIST)
+		case 403:
+			panic(herr.EACCES)
+		default:
+			panic(exception)
+		}
+	}
+
+	return err
 }
 
 func urlAddParam(url, name, val string) string {

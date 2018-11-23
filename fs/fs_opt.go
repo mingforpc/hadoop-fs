@@ -310,9 +310,9 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 
 	defer recoverError(&result)
 
-	logger.Trace.Printf("nodeid[%d], attr[%+v], toSet[%d]\n", nodeid, attr, toSet)
-
 	filepath := PATH_MANAGER.Get(nodeid)
+
+	logger.Trace.Printf("nodeid[%d], filepath[%s], attr[%+v], toSet[%d]\n", nodeid, filepath, attr, toSet)
 
 	if filepath == "" {
 		// 文件不在路径缓存中
@@ -339,10 +339,20 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 		if err != nil {
 			panic(err)
 		}
+		logger.Trace.Printf("atime[%d], mtime[%d] \n", atime, mtime)
 
 	}
 
-	logger.Trace.Printf("atime[%d], mtime[%d] \n", atime, mtime)
+	if toSet&fuse.FUSE_SET_ATTR_MODE > 0 {
+		// 设置文件的permission
+
+		modeStr := util.ModeToStr(attr.Mode)
+		err := HADOOP.SetPermission(filepath, modeStr)
+
+		if err != nil {
+			panic(err)
+		}
+	}
 
 	// 由于Hadoop中没有ctime所以忽略
 	// 忽略UID, GID，因为由启动的参数决定的
