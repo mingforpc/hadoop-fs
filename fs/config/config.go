@@ -26,10 +26,9 @@ type Config struct {
 	Hadoop HadoopConfig
 }
 
-func ParseFromCmd() Config {
+var config = Config{}
 
-	config := Config{}
-
+func init() {
 	flag.StringVar(&config.Mountpoint, "mp", "", "mountpoint")
 	flag.Float64Var(&config.Attrtimeout, "attr_timeout", 10, "file attr timeout")
 
@@ -40,6 +39,11 @@ func ParseFromCmd() Config {
 	flag.StringVar(&config.Hadoop.Delegation, "hadoop_delegation", "", "Hadoop WebHDFS REST API delegation")
 	flag.BoolVar(&config.Debug, "debug", false, "Debug Mode")
 	flag.IntVar(&config.NotExistCacheTimeout, "not_exist_cache", 200, "How long for not exist file cache, default is 200s")
+
+	flag.Parse()
+}
+
+func ParseFromCmd() Config {
 
 	// mountpoint是必填的
 	if config.Mountpoint == "" {

@@ -22,6 +22,7 @@ const (
 	TRUNCATE         = "TRUNCATE"
 	DELETE           = "DELETE"
 	SETPERMISSION    = "SETPERMISSION"
+	RENAME           = "RENAME"
 )
 
 var _default_buffersize = 4096
@@ -541,6 +542,57 @@ func (hadoop *HadoopController) SetPermission(filepath, permission string) (err 
 	}
 
 	return err
+}
+
+// 文件重命名
+func (hadoop *HadoopController) Rename(src, dest string) (result bool, err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(src, RENAME)
+	url = urlAddParam(url, "destination", dest)
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(herr.EEXIST)
+		case 403:
+			panic(herr.EACCES)
+		default:
+			panic(exception)
+		}
+	}
+
+	booleanRes := BooleanResp{}
+	err = json.Unmarshal(buf.Bytes(), &booleanRes)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return booleanRes.Boolean, err
 }
 
 func urlAddParam(url, name, val string) string {

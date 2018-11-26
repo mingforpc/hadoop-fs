@@ -2,9 +2,9 @@
 
 利用Fuse和Hadoop WebHDFS REST API 将 HDFS Mount到本地目录的小程序
 
-**目前...仅支持读写,删除文件(非文件夹), 删除文件夹, 修改文件权限**
+**目前支持文件的主要操作...读写,删除文件(非文件夹), 删除文件夹, 修改文件权限, 重命名**
 
-**，创建软连接，重命名，Xattr等都未实现**
+**软连接，Xattr等都未实现**
 
 ## 使用
 
@@ -15,6 +15,7 @@
 * `mp` 是 mountpoint，挂载的目录
 * `hadoop_host` 是Hadoop的IP
 * `hadoop_port` 是WebHDFS REST API的端口
+* 如果要执行写操作，一定要设置Hadoop的user，不然会返回没权限
 
 其他可以选项使用`./hadoop-fs --help`查看
 

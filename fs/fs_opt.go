@@ -333,13 +333,12 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 	}
 
 	if atime > 0 || mtime > 0 {
+		logger.Trace.Printf("atime[%d], mtime[%d] \n", atime, mtime)
 
 		err := HADOOP.ModificationTime(filepath, atime, mtime)
-
 		if err != nil {
 			panic(err)
 		}
-		logger.Trace.Printf("atime[%d], mtime[%d] \n", atime, mtime)
 
 	}
 
@@ -437,4 +436,47 @@ var unlink = func(req fuse.FuseReq, parentid uint64, name string) (result int32)
 // 删除文件夹函数
 var rmdir = func(req fuse.FuseReq, parentid uint64, name string) (result int32) {
 	return _rmFileOrDir(req, parentid, name)
+}
+
+// 重命名文件
+var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid uint64, newname string) (result int32) {
+
+	defer recoverError(&result)
+
+	parentPath := PATH_MANAGER.Get(parentid)
+	newParentPath := PATH_MANAGER.Get(newparentid)
+
+	logger.Trace.Printf("rename: parentid[%d], parentPath[%s], name[%s], newparentid[%d], newParentPath[%s], newname[%s]\n", parentid, parentPath, name, newparentid, newParentPath, newname)
+
+	filePath := util.MergePath(parentPath, name)
+	newFilePath := util.MergePath(newParentPath, newname)
+
+	// 获取文件信息
+	file, err := HADOOP.GetFileStatus(filePath)
+	if err != nil {
+		panic(err)
+	}
+	file.AdjustNormal()
+
+	// Rename 文件
+	success, err := HADOOP.Rename(filePath, newFilePath)
+	if err != nil {
+		panic(err)
+	} else if !success {
+		panic(herr.EACCES)
+	}
+
+	// 获取Rename后文件的信息
+	newfile, err := HADOOP.GetFileStatus(newFilePath)
+	if err != nil {
+		panic(err)
+	}
+	newfile.AdjustNormal()
+
+	// 缓存管理
+	PATH_MANAGER.Delete(uint64(file.StIno))
+	PATH_MANAGER.Insert(uint64(newfile.StIno), newFilePath)
+	NOT_EXIST_FILE_CACHE.Delete(newFilePath)
+
+	return errno.SUCCESS
 }
