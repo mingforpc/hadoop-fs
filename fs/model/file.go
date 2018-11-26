@@ -11,10 +11,12 @@ import (
 
 const TYPE_FILE = syscall.S_IFREG
 const TYPE_DIR = syscall.S_IFDIR
+const TYPE_SYMLINK = syscall.S_IFLNK
 
 const (
-	HADOOP_DIR  = "DIRECTORY"
-	HADOOP_FILE = "FILE"
+	HADOOP_DIR     = "DIRECTORY"
+	HADOOP_FILE    = "FILE"
+	HADOOP_SYMLINK = "SYMLINK"
 )
 
 type FileModel struct {
@@ -79,6 +81,8 @@ func (file *FileModel) AdjustNormal() {
 	case HADOOP_FILE:
 		file.FileType = TYPE_FILE
 		file.StNlink = 1
+	case HADOOP_SYMLINK:
+		file.FileType = TYPE_SYMLINK
 	}
 
 	file.StCtime = file.StMtime

@@ -45,6 +45,7 @@ func Service(cg config.Config) {
 	opts.Unlink = &unlink
 	opts.Rmdir = &rmdir
 	opts.Rename = &rename
+	opts.Symlink = &symlink
 
 	se := fuse.FuseSession{}
 

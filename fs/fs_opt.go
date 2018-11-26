@@ -480,3 +480,36 @@ var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid ui
 
 	return errno.SUCCESS
 }
+
+var symlink = func(req fuse.FuseReq, parentid uint64, link string, name string) (stat *fuse.FuseStat, result int32) {
+
+	defer recoverError(&result)
+
+	parentPath := PATH_MANAGER.Get(parentid)
+
+	logger.Trace.Printf("symlink: parentid[%d], parentPath[%s], link[%s], name[%s]\n", parentid, parentPath, link, name)
+
+	srcPath := util.MergePath(parentPath, link)
+	symlinkPath := util.MergePath(parentPath, name)
+
+	err := HADOOP.CreateSymlink(srcPath, symlinkPath)
+	if err != nil {
+		panic(err)
+	}
+
+	symlinkFile, err := HADOOP.GetFileStatus(symlinkPath)
+	if err != nil {
+		panic(err)
+	}
+	symlinkFile.AdjustNormal()
+
+	stat = &fuse.FuseStat{}
+	symlinkFile.WriteToStat(&stat.Stat)
+	stat.Nodeid = uint64(symlinkFile.StIno)
+	stat.Generation = 1
+
+	// 加入到路径的缓存
+	PATH_MANAGER.Insert(stat.Nodeid, symlinkPath)
+
+	return stat, errno.SUCCESS
+}
