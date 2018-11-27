@@ -24,6 +24,8 @@ func recoverError(res *int32) {
 			*res = errno.ENOENT
 		case herr.EAGAIN:
 			*res = errno.EAGAIN
+		case herr.ENOTSUP:
+			*res = errno.ENOTSUP
 		default:
 			*res = errno.ENOSYS
 		}

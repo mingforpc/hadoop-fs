@@ -676,7 +676,7 @@ func (hadoop *HadoopController) Setxattr(filepath, name, value, flag string) (er
 		}
 		switch resp.StatusCode {
 		case 400:
-			panic(herr.EAGAIN)
+			panic(herr.ENOTSUP)
 		case 404:
 			panic(herr.NO_FOUND)
 		case 403:
