@@ -24,6 +24,7 @@ const (
 	SETPERMISSION    = "SETPERMISSION"
 	RENAME           = "RENAME"
 	CREATESYMLINK    = "CREATESYMLINK"
+	SETXATTR         = "SETXATTR"
 )
 
 var _default_buffersize = 4096
@@ -638,6 +639,56 @@ func (hadoop *HadoopController) CreateSymlink(src, link string) (err error) {
 	}
 
 	return err
+}
+
+// setxattr
+func (hadoop *HadoopController) Setxattr(filepath, name, value, flag string) (err error) {
+	defer recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, SETXATTR)
+	url = urlAddParam(url, "xattr.name", name)
+	url = urlAddParam(url, "xattr.value", value)
+	url = urlAddParam(url, "flag", flag)
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 400:
+			panic(herr.EAGAIN)
+		case 404:
+			panic(herr.NO_FOUND)
+		case 403:
+			// xattr已经存在
+			panic(herr.EEXIST)
+		default:
+			panic(exception)
+		}
+	}
+
+	return err
+
 }
 
 func urlAddParam(url, name, val string) string {

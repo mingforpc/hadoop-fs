@@ -4,7 +4,9 @@
 
 **目前支持文件的主要操作...读写,删除文件(非文件夹), 删除文件夹, 修改文件权限, 重命名**
 
-**软连接，Xattr等都未实现**
+**软连接功能，看起来HDFS不支持[https://issues.apache.org/jira/browse/HDFS-4559](https://issues.apache.org/jira/browse/HDFS-4559)**
+
+**Xattr等都未实现**
 
 ## 使用
 

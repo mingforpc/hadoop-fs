@@ -45,7 +45,10 @@ func Service(cg config.Config) {
 	opts.Unlink = &unlink
 	opts.Rmdir = &rmdir
 	opts.Rename = &rename
-	opts.Symlink = &symlink
+	opts.Setxattr = &setxattr
+
+	// Hadoop不支持，暂时去掉
+	// opts.Symlink = &symlink
 
 	se := fuse.FuseSession{}
 

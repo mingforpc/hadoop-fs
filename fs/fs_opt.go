@@ -22,6 +22,8 @@ func recoverError(res *int32) {
 			*res = errno.EEXIST
 		case herr.EACCES:
 			*res = errno.ENOENT
+		case herr.EAGAIN:
+			*res = errno.EAGAIN
 		default:
 			*res = errno.ENOSYS
 		}
@@ -481,6 +483,42 @@ var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid ui
 	return errno.SUCCESS
 }
 
+// 设置文件额外属性
+var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, flags uint32) (result int32) {
+
+	defer recoverError(&result)
+
+	filepath := PATH_MANAGER.Get(nodeid)
+
+	logger.Trace.Printf("setxattr: nodeid[%d], filepath[%s], name[%s], value[%s], flags[%d]\n", nodeid, filepath, name, value, flags)
+
+	strFlag := "CREATE"
+
+	switch flags {
+	case 0:
+	case fuse.XATTR_CREATE:
+	case fuse.XATTR_REPLACE:
+		strFlag = "REPLACE"
+	}
+
+	err := HADOOP.Setxattr(filepath, name, value, strFlag)
+
+	if err != nil {
+		if err == herr.EEXIST {
+			// Xattr已经存在要用replace
+			err = HADOOP.Setxattr(filepath, name, value, "REPLACE")
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			panic(err)
+		}
+	}
+
+	return errno.SUCCESS
+}
+
+// Hadoop不支持
 var symlink = func(req fuse.FuseReq, parentid uint64, link string, name string) (stat *fuse.FuseStat, result int32) {
 
 	defer recoverError(&result)
