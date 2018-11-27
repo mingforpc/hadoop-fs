@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"bytes"
 	"hadoop-fs/fs/controler"
 	herr "hadoop-fs/fs/controler/hadoop_error"
 	"hadoop-fs/fs/logger"
@@ -26,6 +27,10 @@ func recoverError(res *int32) {
 			*res = errno.EAGAIN
 		case herr.ENOTSUP:
 			*res = errno.ENOTSUP
+		case herr.ERANGE:
+			*res = errno.ERANGE
+		case herr.ENOATTR:
+			*res = errno.ENOATTR
 		default:
 			*res = errno.ENOSYS
 		}
@@ -515,6 +520,72 @@ var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, 
 		} else {
 			panic(err)
 		}
+	}
+
+	return errno.SUCCESS
+}
+
+// 获取指定名字的文件额外属性值
+var getxattr = func(req fuse.FuseReq, nodeid uint64, name string, size uint32) (value string, result int32) {
+
+	defer recoverError(&result)
+
+	filepath := PATH_MANAGER.Get(nodeid)
+	logger.Trace.Printf("getxattr: nodeid[%d], filepath[%s], name[%s], size[%d]\n", nodeid, filepath, name, size)
+
+	value, err := HADOOP.Getxattr(filepath, name)
+
+	if err != nil {
+		panic(err)
+	}
+
+	if size > 0 && uint32(len(value)) > size {
+		panic(herr.ERANGE)
+	}
+
+	return value, errno.SUCCESS
+}
+
+var listxattr = func(req fuse.FuseReq, nodeid uint64, size uint32) (list string, result int32) {
+	defer recoverError(&result)
+
+	filepath := PATH_MANAGER.Get(nodeid)
+	logger.Trace.Printf("listxattr: nodeid[%d], filepath[%s],  size[%d]\n", nodeid, filepath, size)
+
+	attrs, err := HADOOP.Listxattr(filepath)
+
+	if err != nil {
+		panic(err)
+	}
+
+	buf := bytes.NewBuffer(nil)
+	length := len(attrs)
+	for i := 0; i < length; i++ {
+		buf.Write([]byte(attrs[i].Name))
+		if i < length-1 {
+			buf.WriteByte(byte(0))
+		}
+
+	}
+	list = buf.String()
+
+	if size > 0 && uint32(len(list)) > size {
+		panic(herr.ERANGE)
+	}
+
+	return list, errno.SUCCESS
+}
+
+var removexattr = func(req fuse.FuseReq, nodeid uint64, name string) (result int32) {
+	defer recoverError(&result)
+
+	filepath := PATH_MANAGER.Get(nodeid)
+	logger.Trace.Printf("removexattr: nodeid[%d], filepath[%s],  name[%s]\n", nodeid, filepath, name)
+
+	err := HADOOP.Removexattr(filepath, name)
+
+	if err != nil {
+		panic(err)
 	}
 
 	return errno.SUCCESS

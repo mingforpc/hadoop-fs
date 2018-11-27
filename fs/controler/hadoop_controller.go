@@ -25,6 +25,8 @@ const (
 	RENAME           = "RENAME"
 	CREATESYMLINK    = "CREATESYMLINK"
 	SETXATTR         = "SETXATTR"
+	GETXATTRS        = "GETXATTRS"
+	REMOVEXATTR      = "REMOVEXATTR"
 )
 
 var _default_buffersize = 4096
@@ -688,7 +690,144 @@ func (hadoop *HadoopController) Setxattr(filepath, name, value, flag string) (er
 	}
 
 	return err
+}
 
+// getxattr
+func (hadoop *HadoopController) Getxattr(filepath, name string) (value string, err error) {
+	recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, GETXATTRS)
+	url = urlAddParam(url, "xattr.name", name)
+	url = urlAddParam(url, "encoding", "text")
+
+	resp, err := http.Get(url)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(herr.NO_FOUND)
+		default:
+			panic(exception)
+		}
+	}
+
+	attrs := XattrsResp{}
+	err = json.Unmarshal(buf.Bytes(), &attrs)
+
+	if err != nil {
+		panic(err)
+	}
+
+	attr := attrs.Xattrs[0]
+	value = attr.Value
+
+	return value, err
+}
+
+// lisstxattr
+func (hadoop *HadoopController) Listxattr(filepath string) (attrs []Xattr, err error) {
+	recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, GETXATTRS)
+	url = urlAddParam(url, "encoding", "text")
+
+	resp, err := http.Get(url)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 404:
+			panic(herr.NO_FOUND)
+		default:
+			panic(exception)
+		}
+	}
+
+	attrsresp := XattrsResp{}
+	err = json.Unmarshal(buf.Bytes(), &attrsresp)
+
+	if err != nil {
+		panic(err)
+	}
+
+	attrs = attrsresp.Xattrs
+
+	return attrs, err
+}
+
+// removexattr
+func (hadoop *HadoopController) Removexattr(filepath, name string) (err error) {
+	recoverError(&err)
+
+	url := hadoop.urlJoin(filepath, REMOVEXATTR)
+	url = urlAddParam(url, "xattr.name", name)
+
+	req, err := http.NewRequest("PUT", url, nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close()
+
+	buf := bytes.NewBuffer(nil)
+	buf.ReadFrom(resp.Body)
+
+	if resp.StatusCode != 200 {
+		exception := HadoopException{}
+		err = json.Unmarshal(buf.Bytes(), &exception)
+
+		if err != nil {
+			panic(err)
+		}
+		switch resp.StatusCode {
+		case 400:
+			panic(herr.ENOTSUP)
+		case 403:
+			panic(herr.ENOATTR)
+		case 404:
+			panic(herr.NO_FOUND)
+		default:
+			panic(exception)
+		}
+	}
+
+	return err
 }
 
 func urlAddParam(url, name, val string) string {

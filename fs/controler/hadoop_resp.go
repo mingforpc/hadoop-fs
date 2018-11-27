@@ -50,3 +50,12 @@ type RemoteException struct {
 type BooleanResp struct {
 	Boolean bool `json:"boolean"`
 }
+
+type XattrsResp struct {
+	Xattrs []Xattr `json:"XAttrs"`
+}
+
+type Xattr struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}

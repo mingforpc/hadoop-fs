@@ -2,11 +2,15 @@
 
 利用Fuse和Hadoop WebHDFS REST API 将 HDFS Mount到本地目录的小程序
 
-**目前支持文件的主要操作...读写,删除文件(非文件夹), 删除文件夹, 修改文件权限, 重命名**
+**目前支持文件的主要操作...读写,删除文件(非文件夹), 删除文件夹, 修改文件权限, 重命名, xattr等**
 
 **软连接功能，看起来HDFS不支持[https://issues.apache.org/jira/browse/HDFS-4559](https://issues.apache.org/jira/browse/HDFS-4559)**
 
-**Xattr等都未实现**
+## 待实现与优化
+
+* 优化错误返回
+* `Access()`的实现
+* `chown`和`chgrp`的支持要想想怎么做
 
 ## 使用
 

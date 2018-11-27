@@ -46,6 +46,9 @@ func Service(cg config.Config) {
 	opts.Rmdir = &rmdir
 	opts.Rename = &rename
 	opts.Setxattr = &setxattr
+	opts.Getxattr = &getxattr
+	opts.Listxattr = &listxattr
+	opts.Removexattr = &removexattr
 
 	// Hadoop不支持，暂时去掉
 	// opts.Symlink = &symlink
