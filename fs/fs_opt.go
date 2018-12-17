@@ -38,7 +38,7 @@ func recoverError(res *int32) {
 	}
 }
 
-var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) (result int32) {
+var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -46,11 +46,13 @@ var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) (resul
 
 	logger.Trace.Printf("getattr: path[%s] \n", path)
 
+	fsStat = &fuse.FuseStat{}
+
 	if path == "/" {
 
 		rootfile := controler.ROOT.GetRoot(req)
 
-		rootfile.WriteToStat(stat)
+		rootfile.WriteToStat(&fsStat.Stat)
 
 	} else {
 
@@ -61,13 +63,13 @@ var getattr = func(req fuse.FuseReq, nodeid uint64, stat *syscall.Stat_t) (resul
 		}
 
 		file.AdjustNormal()
-		file.WriteToStat(stat)
+		file.WriteToStat(&fsStat.Stat)
 
 	}
 
 	result = errno.SUCCESS
 
-	return result
+	return nil, result
 }
 
 var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
@@ -163,7 +165,7 @@ var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) (resul
 	return result
 }
 
-var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.Stat_t, generation *uint64) (result int32) {
+var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.FuseStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -190,15 +192,18 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string, stat *syscall.
 
 	file.AdjustNormal()
 
-	file.WriteToStat(stat)
+	fsStat = &fuse.FuseStat{}
+
+	fsStat.Nodeid = uint64(file.StIno)
+	file.WriteToStat(&fsStat.Stat)
 
 	PATH_MANAGER.Insert(uint64(file.StIno), filePath)
 
 	// TODO:
-	*generation = 1
+	fsStat.Generation = 1
 
 	result = errno.SUCCESS
-	return result
+	return nil, result
 }
 
 var open = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
@@ -315,7 +320,7 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 	return stat, errno.SUCCESS
 }
 
-var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet uint32) (result int32) {
+var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet uint32) (result int32) {
 
 	defer recoverError(&result)
 
@@ -334,11 +339,11 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 	if toSet&fuse.FUSE_SET_ATTR_ATIME > 0 {
 		// 设置文件atime
 
-		atime = util.NsToMs(syscall.TimespecToNsec(attr.Atim))
+		atime = util.NsToMs(syscall.TimespecToNsec(attr.Stat.Atim))
 	}
 	if toSet&fuse.FUSE_SET_ATTR_MTIME > 0 {
 		// 设置文件mtime
-		mtime = util.NsToMs(syscall.TimespecToNsec(attr.Mtim))
+		mtime = util.NsToMs(syscall.TimespecToNsec(attr.Stat.Mtim))
 	}
 
 	if atime > 0 || mtime > 0 {
@@ -354,7 +359,7 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr *syscall.Stat_t, toSet 
 	if toSet&fuse.FUSE_SET_ATTR_MODE > 0 {
 		// 设置文件的permission
 
-		modeStr := util.ModeToStr(attr.Mode)
+		modeStr := util.ModeToStr(attr.Stat.Mode)
 		err := HADOOP.SetPermission(filepath, modeStr)
 
 		if err != nil {
