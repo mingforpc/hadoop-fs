@@ -70,10 +70,9 @@ func Service(cg config.Config) {
 	signal.Notify(signalChan, os.Interrupt, os.Kill, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	go exitSign(signalChan, &se)
 
-	defer umount(&se)
-
 	se.FuseLoop()
 
+	se.Close()
 }
 
 func umount(se *fuse.FuseSession) {
@@ -89,6 +88,7 @@ func exitSign(signalChan chan os.Signal, se *fuse.FuseSession) {
 
 	logger.Info.Printf("Receive Sign[%s]\n", sign)
 
+	umount(se)
 	se.Close()
 
 }

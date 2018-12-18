@@ -69,7 +69,7 @@ var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, resu
 
 	result = errno.SUCCESS
 
-	return nil, result
+	return fsStat, result
 }
 
 var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
@@ -203,7 +203,7 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.
 	fsStat.Generation = 1
 
 	result = errno.SUCCESS
-	return nil, result
+	return fsStat, result
 }
 
 var open = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
