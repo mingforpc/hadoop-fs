@@ -25,3 +25,7 @@
 
 其他可以选项使用`./hadoop-fs --help`查看
 
+## 退出
+
+1. 直接 `kill {pid}`
+2. 通过 `fusermount -u {mountpoint}`退出，如果显示busy，则使用`fusermount -uz {mountpoint}`
