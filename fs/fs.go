@@ -53,13 +53,12 @@ func Service(cg config.Config) {
 	// Hadoop不支持，暂时去掉
 	// opts.Symlink = &symlink
 
-	se := fuse.FuseSession{}
+	se := fuse.NewFuseSession(cg.Mountpoint, &opts, 1024)
 
-	se.Init(cg.Mountpoint, &opts)
 	se.Debug = cg.Debug
 	se.FuseConfig.AttrTimeout = cg.Attrtimeout
 
-	err := mount.Mount(&se)
+	err := mount.Mount(se)
 
 	if err != nil {
 		logger.Error.Println(err)
@@ -68,7 +67,7 @@ func Service(cg config.Config) {
 
 	signalChan := make(chan os.Signal)
 	signal.Notify(signalChan, os.Interrupt, os.Kill, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
-	go exitSign(signalChan, &se)
+	go exitSign(signalChan, se)
 
 	se.FuseLoop()
 
