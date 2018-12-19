@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/mingforpc/fuse-go/fuse/kernel"
+	"github.com/mingforpc/fuse-go/fuse"
 )
 
 const TYPE_FILE = syscall.S_IFREG
@@ -107,8 +107,8 @@ func (file *FileModel) AdjustNormal() {
 	file.StGid = uint(gid)
 }
 
-func (file *FileModel) ToFuseDirent() kernel.FuseDirent {
-	ent := kernel.FuseDirent{}
+func (file *FileModel) ToFuseDirent() fuse.FuseDirent {
+	ent := fuse.FuseDirent{}
 
 	ent.Ino = uint64(file.StIno)
 	ent.NameLen = uint32(len(file.Name))

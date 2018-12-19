@@ -10,7 +10,6 @@ import (
 
 	"github.com/mingforpc/fuse-go/fuse"
 	"github.com/mingforpc/fuse-go/fuse/errno"
-	"github.com/mingforpc/fuse-go/fuse/kernel"
 )
 
 // 统一的错误处理
@@ -77,7 +76,7 @@ var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32
 	return errno.SUCCESS
 }
 
-var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (fileList []kernel.FuseDirent, result int32) {
+var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (fileList []fuse.FuseDirent, result int32) {
 
 	defer recoverError(&result)
 
@@ -85,7 +84,7 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 
 	logger.Trace.Printf("readdir: path[%s] \n", path)
 
-	fileList = make([]kernel.FuseDirent, 0)
+	fileList = make([]fuse.FuseDirent, 0)
 
 	// 记录fileList中的文件数量
 	fileCount := uint32(0)
@@ -97,10 +96,10 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 	fileReqOffset := offset / 32
 
 	if fileReqOffset < 2 {
-		current := kernel.FuseDirent{NameLen: uint32(len(".")), Ino: nodeid, Off: 0, Name: "."}
-		prev := kernel.FuseDirent{NameLen: uint32(len("..")), Ino: nodeid, Off: 0, Name: ".."}
+		current := fuse.FuseDirent{NameLen: uint32(len(".")), Ino: nodeid, Off: 0, Name: "."}
+		prev := fuse.FuseDirent{NameLen: uint32(len("..")), Ino: nodeid, Off: 0, Name: ".."}
 
-		fileList = make([]kernel.FuseDirent, 2)
+		fileList = make([]fuse.FuseDirent, 2)
 
 		fileList[0] = current
 		fileList[1] = prev
