@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"hadoop-fs/fs/cache"
 	"hadoop-fs/fs/config"
 	"hadoop-fs/fs/controler"
 	"hadoop-fs/fs/logger"
@@ -11,23 +10,24 @@ import (
 
 	"github.com/mingforpc/fuse-go/fuse"
 	"github.com/mingforpc/fuse-go/fuse/mount"
+	"github.com/mingforpc/fuse-go/fuse/util"
 )
 
-var PATH_MANAGER = cache.FusePathManager{}
-var HADOOP controler.HadoopController
-var NOT_EXIST_FILE_CACHE cache.NotExistCache
+var pathManager = util.FusePathManager{}
+var hadoopControler controler.HadoopController
+var notExistManager util.NotExistManager
 
-// 服务开始
+// Service 服务开始
 func Service(cg config.Config) {
 
-	HADOOP = controler.HadoopController{}
-	HADOOP.Init(false, cg.Hadoop.Host, cg.Hadoop.Port, cg.Hadoop.Username)
+	hadoopControler = controler.HadoopController{}
+	hadoopControler.Init(false, cg.Hadoop.Host, cg.Hadoop.Port, cg.Hadoop.Username)
 
-	NOT_EXIST_FILE_CACHE = cache.NotExistCache{}
-	NOT_EXIST_FILE_CACHE.Init()
-	NOT_EXIST_FILE_CACHE.NegativeTimeout = cg.NotExistCacheTimeout
+	notExistManager = util.NotExistManager{}
+	notExistManager.Init()
+	notExistManager.NegativeTimeout = cg.NotExistCacheTimeout
 
-	PATH_MANAGER.Init()
+	pathManager.Init()
 
 	opts := fuse.FuseOpt{}
 	opts.Getattr = &getattr

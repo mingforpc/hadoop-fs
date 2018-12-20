@@ -41,7 +41,7 @@ var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, resu
 
 	defer recoverError(&result)
 
-	path := PATH_MANAGER.Get(nodeid)
+	path := pathManager.Get(nodeid)
 
 	logger.Trace.Printf("getattr: path[%s] \n", path)
 
@@ -55,7 +55,7 @@ var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, resu
 
 	} else {
 
-		file, err := HADOOP.GetFileStatus(path)
+		file, err := hadoopControler.GetFileStatus(path)
 
 		if err != nil {
 			panic(err)
@@ -80,7 +80,7 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 
 	defer recoverError(&result)
 
-	path := PATH_MANAGER.Get(nodeid)
+	path := pathManager.Get(nodeid)
 
 	logger.Trace.Printf("readdir: path[%s] \n", path)
 
@@ -113,7 +113,7 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 	fileOffset := uint64(2)
 
 	for {
-		remoteFiles, remain, err := HADOOP.List(path, lastPathSuffix)
+		remoteFiles, remain, err := hadoopControler.List(path, lastPathSuffix)
 
 		logger.Trace.Printf("%+v, remain[%d], err[%s]\n", remoteFiles, remain, err)
 
@@ -154,7 +154,7 @@ var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) (resul
 
 	defer recoverError(&result)
 
-	path := PATH_MANAGER.Get(nodeid)
+	path := pathManager.Get(nodeid)
 
 	if path != "/" {
 		logger.Trace.Printf("release: nodeid[%d], path[%s]\n", nodeid, path)
@@ -168,23 +168,23 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.
 
 	defer recoverError(&result)
 
-	parentPath := PATH_MANAGER.Get(parentId)
+	parentPath := pathManager.Get(parentId)
 
 	logger.Trace.Printf("parentId[%d], parentPath[%s], name[%s]\n", parentId, parentPath, name)
 
 	filePath := util.MergePath(parentPath, name)
 
-	if NOT_EXIST_FILE_CACHE.IsNotExist(filePath) == false {
+	if notExistManager.IsNotExist(filePath) == false {
 		// 文件不存在
 		panic(herr.NO_FOUND)
 		// return errno.ENOENT
 	}
 
-	file, err := HADOOP.GetFileStatus(filePath)
+	file, err := hadoopControler.GetFileStatus(filePath)
 
 	if err != nil {
-		// 不存在的文件会缓存 NOT_EXIST_FILE_CACHE 中的秒数
-		NOT_EXIST_FILE_CACHE.Insert(filePath, NOT_EXIST_FILE_CACHE.NegativeTimeout)
+		// 不存在的文件会缓存 notExistManager 中的秒数
+		notExistManager.Set(filePath, notExistManager.NegativeTimeout)
 		// return errno.ENOENT
 		panic(herr.NO_FOUND)
 	}
@@ -196,7 +196,7 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.
 	fsStat.Nodeid = uint64(file.StIno)
 	file.WriteToStat(&fsStat.Stat)
 
-	PATH_MANAGER.Insert(uint64(file.StIno), filePath)
+	pathManager.Set(uint64(file.StIno), filePath)
 
 	// TODO:
 	fsStat.Generation = 1
@@ -214,7 +214,7 @@ var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi 
 
 	defer recoverError(&result)
 
-	path := PATH_MANAGER.Get(nodeid)
+	path := pathManager.Get(nodeid)
 
 	logger.Info.Printf("nodeid[%d], path[%s], size[%d], offset[%d], fi[%+v] \n", nodeid, path, size, offset, fi)
 
@@ -223,7 +223,7 @@ var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi 
 		return nil, errno.ENOENT
 	}
 
-	content, err := HADOOP.Read(path, offset, size, 0)
+	content, err := hadoopControler.Read(path, offset, size, 0)
 
 	if err != nil && err != herr.EOF {
 		// TODO: 出错
@@ -238,12 +238,12 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (s
 
 	defer recoverError(&result)
 
-	path := PATH_MANAGER.Get(parentid)
+	path := pathManager.Get(parentid)
 	filePath := util.MergePath(path, name)
 
 	modeStr := util.ModeToStr(mode)
 
-	success, err := HADOOP.MakeDir(filePath, modeStr)
+	success, err := hadoopControler.MakeDir(filePath, modeStr)
 
 	if err != nil {
 		panic(err)
@@ -251,7 +251,7 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (s
 		panic(herr.EACCES)
 	}
 
-	file, err := HADOOP.GetFileStatus(filePath)
+	file, err := hadoopControler.GetFileStatus(filePath)
 
 	if err != nil {
 		panic(err)
@@ -266,9 +266,9 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (s
 	stat.Generation = 1
 
 	// 加入到路径的缓存
-	PATH_MANAGER.Insert(stat.Nodeid, filePath)
+	pathManager.Set(stat.Nodeid, filePath)
 	// 删除不存在文件缓存
-	NOT_EXIST_FILE_CACHE.Delete(filePath)
+	notExistManager.Del(filePath)
 
 	return stat, errno.SUCCESS
 }
@@ -279,7 +279,7 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 
 	logger.Trace.Printf(" parentid[%d], name[%s], mode[%d], fi[%+v] \n", parentid, name, mode, fi)
 
-	path := PATH_MANAGER.Get(parentid)
+	path := pathManager.Get(parentid)
 
 	if path == "" {
 		// 父目录不在路径缓存中
@@ -290,13 +290,13 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 
 	modeStr := util.ModeToStr(mode)
 
-	err := HADOOP.Create(filePath, modeStr)
+	err := hadoopControler.Create(filePath, modeStr)
 
 	if err != nil {
 		panic(err)
 	}
 
-	file, err := HADOOP.GetFileStatus(filePath)
+	file, err := hadoopControler.GetFileStatus(filePath)
 
 	if err != nil {
 		panic(err)
@@ -311,10 +311,10 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 	stat.Generation = 1
 
 	// 加入到路径的缓存
-	PATH_MANAGER.Insert(stat.Nodeid, filePath)
+	pathManager.Set(stat.Nodeid, filePath)
 
 	// 删除不存在文件缓存
-	NOT_EXIST_FILE_CACHE.Delete(filePath)
+	notExistManager.Del(filePath)
 
 	return stat, errno.SUCCESS
 }
@@ -323,7 +323,7 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet ui
 
 	defer recoverError(&result)
 
-	filepath := PATH_MANAGER.Get(nodeid)
+	filepath := pathManager.Get(nodeid)
 
 	logger.Trace.Printf("nodeid[%d], filepath[%s], attr[%+v], toSet[%d]\n", nodeid, filepath, attr, toSet)
 
@@ -348,7 +348,7 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet ui
 	if atime > 0 || mtime > 0 {
 		logger.Trace.Printf("atime[%d], mtime[%d] \n", atime, mtime)
 
-		err := HADOOP.ModificationTime(filepath, atime, mtime)
+		err := hadoopControler.ModificationTime(filepath, atime, mtime)
 		if err != nil {
 			panic(err)
 		}
@@ -359,14 +359,14 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet ui
 		// 设置文件的permission
 
 		modeStr := util.ModeToStr(attr.Stat.Mode)
-		err := HADOOP.SetPermission(filepath, modeStr)
+		err := hadoopControler.SetPermission(filepath, modeStr)
 
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	// 由于Hadoop中没有ctime所以忽略
+	// 由于hadoopControler中没有ctime所以忽略
 	// 忽略UID, GID，因为由启动的参数决定的
 
 	return errno.SUCCESS
@@ -376,11 +376,11 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 
 	defer recoverError(&result)
 
-	filepath := PATH_MANAGER.Get(nodeid)
+	filepath := pathManager.Get(nodeid)
 
 	logger.Trace.Printf("nodeid[%d], filepath[%s], buf[%s], offset[%d], fi[%+v]\n", nodeid, filepath, buf, offset, fi)
 
-	file, err := HADOOP.GetFileStatus(filepath)
+	file, err := hadoopControler.GetFileStatus(filepath)
 
 	if err != nil {
 		panic(err)
@@ -390,18 +390,18 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 
 	if offset == uint64(file.StSize) {
 		// 直接追加
-		err = HADOOP.AppendFile(filepath, buf)
+		err = hadoopControler.AppendFile(filepath, buf)
 	} else {
 		// 先Truncate到offset的位置，再追加
 		success := false
-		success, err = HADOOP.TruncateFile(filepath, int64(offset))
+		success, err = hadoopControler.TruncateFile(filepath, int64(offset))
 
 		if err != nil {
 			panic(err)
 		} else if !success {
 			panic(herr.EACCES)
 		} else {
-			err = HADOOP.AppendFile(filepath, buf)
+			err = hadoopControler.AppendFile(filepath, buf)
 		}
 	}
 
@@ -417,26 +417,26 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 func _rmFileOrDir(req fuse.FuseReq, parentid uint64, name string) (result int32) {
 	defer recoverError(&result)
 
-	parentPath := PATH_MANAGER.Get(parentid)
+	parentPath := pathManager.Get(parentid)
 
 	logger.Trace.Printf("parentid[%d], parentPath[%s], name[%s]\n", parentid, parentPath, name)
 
 	filePath := util.MergePath(parentPath, name)
 
-	file, err := HADOOP.GetFileStatus(filePath)
+	file, err := hadoopControler.GetFileStatus(filePath)
 	if err != nil {
 		panic(err)
 	}
 	file.AdjustNormal()
 
-	success, err := HADOOP.Delete(filePath)
+	success, err := hadoopControler.Delete(filePath)
 	if err != nil {
 		panic(err)
 	} else if !success {
 		panic(herr.EACCES)
 	}
 
-	PATH_MANAGER.Delete(uint64(file.StIno))
+	pathManager.Del(uint64(file.StIno))
 
 	return errno.SUCCESS
 }
@@ -456,8 +456,8 @@ var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid ui
 
 	defer recoverError(&result)
 
-	parentPath := PATH_MANAGER.Get(parentid)
-	newParentPath := PATH_MANAGER.Get(newparentid)
+	parentPath := pathManager.Get(parentid)
+	newParentPath := pathManager.Get(newparentid)
 
 	logger.Trace.Printf("rename: parentid[%d], parentPath[%s], name[%s], newparentid[%d], newParentPath[%s], newname[%s]\n", parentid, parentPath, name, newparentid, newParentPath, newname)
 
@@ -465,14 +465,14 @@ var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid ui
 	newFilePath := util.MergePath(newParentPath, newname)
 
 	// 获取文件信息
-	file, err := HADOOP.GetFileStatus(filePath)
+	file, err := hadoopControler.GetFileStatus(filePath)
 	if err != nil {
 		panic(err)
 	}
 	file.AdjustNormal()
 
 	// Rename 文件
-	success, err := HADOOP.Rename(filePath, newFilePath)
+	success, err := hadoopControler.Rename(filePath, newFilePath)
 	if err != nil {
 		panic(err)
 	} else if !success {
@@ -480,16 +480,16 @@ var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid ui
 	}
 
 	// 获取Rename后文件的信息
-	newfile, err := HADOOP.GetFileStatus(newFilePath)
+	newfile, err := hadoopControler.GetFileStatus(newFilePath)
 	if err != nil {
 		panic(err)
 	}
 	newfile.AdjustNormal()
 
 	// 缓存管理
-	PATH_MANAGER.Delete(uint64(file.StIno))
-	PATH_MANAGER.Insert(uint64(newfile.StIno), newFilePath)
-	NOT_EXIST_FILE_CACHE.Delete(newFilePath)
+	pathManager.Del(uint64(file.StIno))
+	pathManager.Set(uint64(newfile.StIno), newFilePath)
+	notExistManager.Del(newFilePath)
 
 	return errno.SUCCESS
 }
@@ -499,7 +499,7 @@ var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, 
 
 	defer recoverError(&result)
 
-	filepath := PATH_MANAGER.Get(nodeid)
+	filepath := pathManager.Get(nodeid)
 
 	logger.Trace.Printf("setxattr: nodeid[%d], filepath[%s], name[%s], value[%s], flags[%d]\n", nodeid, filepath, name, value, flags)
 
@@ -512,12 +512,12 @@ var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, 
 		strFlag = "REPLACE"
 	}
 
-	err := HADOOP.Setxattr(filepath, name, value, strFlag)
+	err := hadoopControler.Setxattr(filepath, name, value, strFlag)
 
 	if err != nil {
 		if err == herr.EEXIST {
 			// Xattr已经存在要用replace
-			err = HADOOP.Setxattr(filepath, name, value, "REPLACE")
+			err = hadoopControler.Setxattr(filepath, name, value, "REPLACE")
 			if err != nil {
 				panic(err)
 			}
@@ -534,10 +534,10 @@ var getxattr = func(req fuse.FuseReq, nodeid uint64, name string, size uint32) (
 
 	defer recoverError(&result)
 
-	filepath := PATH_MANAGER.Get(nodeid)
+	filepath := pathManager.Get(nodeid)
 	logger.Trace.Printf("getxattr: nodeid[%d], filepath[%s], name[%s], size[%d]\n", nodeid, filepath, name, size)
 
-	value, err := HADOOP.Getxattr(filepath, name)
+	value, err := hadoopControler.Getxattr(filepath, name)
 
 	if err != nil {
 		panic(err)
@@ -553,10 +553,10 @@ var getxattr = func(req fuse.FuseReq, nodeid uint64, name string, size uint32) (
 var listxattr = func(req fuse.FuseReq, nodeid uint64, size uint32) (list string, result int32) {
 	defer recoverError(&result)
 
-	filepath := PATH_MANAGER.Get(nodeid)
+	filepath := pathManager.Get(nodeid)
 	logger.Trace.Printf("listxattr: nodeid[%d], filepath[%s],  size[%d]\n", nodeid, filepath, size)
 
-	attrs, err := HADOOP.Listxattr(filepath)
+	attrs, err := hadoopControler.Listxattr(filepath)
 
 	if err != nil {
 		panic(err)
@@ -583,10 +583,10 @@ var listxattr = func(req fuse.FuseReq, nodeid uint64, size uint32) (list string,
 var removexattr = func(req fuse.FuseReq, nodeid uint64, name string) (result int32) {
 	defer recoverError(&result)
 
-	filepath := PATH_MANAGER.Get(nodeid)
+	filepath := pathManager.Get(nodeid)
 	logger.Trace.Printf("removexattr: nodeid[%d], filepath[%s],  name[%s]\n", nodeid, filepath, name)
 
-	err := HADOOP.Removexattr(filepath, name)
+	err := hadoopControler.Removexattr(filepath, name)
 
 	if err != nil {
 		panic(err)
@@ -595,24 +595,24 @@ var removexattr = func(req fuse.FuseReq, nodeid uint64, name string) (result int
 	return errno.SUCCESS
 }
 
-// Hadoop不支持
+// hadoopControler不支持
 var symlink = func(req fuse.FuseReq, parentid uint64, link string, name string) (stat *fuse.FuseStat, result int32) {
 
 	defer recoverError(&result)
 
-	parentPath := PATH_MANAGER.Get(parentid)
+	parentPath := pathManager.Get(parentid)
 
 	logger.Trace.Printf("symlink: parentid[%d], parentPath[%s], link[%s], name[%s]\n", parentid, parentPath, link, name)
 
 	srcPath := util.MergePath(parentPath, link)
 	symlinkPath := util.MergePath(parentPath, name)
 
-	err := HADOOP.CreateSymlink(srcPath, symlinkPath)
+	err := hadoopControler.CreateSymlink(srcPath, symlinkPath)
 	if err != nil {
 		panic(err)
 	}
 
-	symlinkFile, err := HADOOP.GetFileStatus(symlinkPath)
+	symlinkFile, err := hadoopControler.GetFileStatus(symlinkPath)
 	if err != nil {
 		panic(err)
 	}
@@ -624,7 +624,7 @@ var symlink = func(req fuse.FuseReq, parentid uint64, link string, name string) 
 	stat.Generation = 1
 
 	// 加入到路径的缓存
-	PATH_MANAGER.Insert(stat.Nodeid, symlinkPath)
+	pathManager.Set(stat.Nodeid, symlinkPath)
 
 	return stat, errno.SUCCESS
 }
