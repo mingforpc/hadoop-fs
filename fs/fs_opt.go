@@ -335,12 +335,12 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet ui
 	var atime int64 = -1
 	var mtime int64 = -1
 
-	if toSet&fuse.FUSE_SET_ATTR_ATIME > 0 {
+	if toSet&fuse.FuseSetAttrAtime > 0 {
 		// 设置文件atime
 
 		atime = util.NsToMs(syscall.TimespecToNsec(attr.Stat.Atim))
 	}
-	if toSet&fuse.FUSE_SET_ATTR_MTIME > 0 {
+	if toSet&fuse.FuseSetAttrMtime > 0 {
 		// 设置文件mtime
 		mtime = util.NsToMs(syscall.TimespecToNsec(attr.Stat.Mtim))
 	}
@@ -355,7 +355,7 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet ui
 
 	}
 
-	if toSet&fuse.FUSE_SET_ATTR_MODE > 0 {
+	if toSet&fuse.FuseSetAttrMode > 0 {
 		// 设置文件的permission
 
 		modeStr := util.ModeToStr(attr.Stat.Mode)
@@ -507,8 +507,8 @@ var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, 
 
 	switch flags {
 	case 0:
-	case fuse.XATTR_CREATE:
-	case fuse.XATTR_REPLACE:
+	case fuse.XattrCreate:
+	case fuse.XattrReplace:
 		strFlag = "REPLACE"
 	}
 

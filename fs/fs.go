@@ -74,14 +74,14 @@ func Service(cg config.Config) {
 	se.Close()
 }
 
-func umount(se *fuse.FuseSession) {
+func umount(se *fuse.Session) {
 
 	err := mount.Unmount(se.Mountpoint)
 	logger.Error.Printf("umount failed [%s], Please umount folder manually! \n", err)
 
 }
 
-func exitSign(signalChan chan os.Signal, se *fuse.FuseSession) {
+func exitSign(signalChan chan os.Signal, se *fuse.Session) {
 
 	sign := <-signalChan
 
