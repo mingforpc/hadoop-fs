@@ -107,8 +107,8 @@ func (file *FileModel) AdjustNormal() {
 	file.StGid = uint(gid)
 }
 
-func (file *FileModel) ToFuseDirent() fuse.FuseDirent {
-	ent := fuse.FuseDirent{}
+func (file *FileModel) ToFuseDirent() fuse.Dirent {
+	ent := fuse.Dirent{}
 
 	ent.Ino = uint64(file.StIno)
 	ent.NameLen = uint32(len(file.Name))

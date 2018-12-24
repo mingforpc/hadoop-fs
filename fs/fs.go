@@ -29,7 +29,7 @@ func Service(cg config.Config) {
 
 	pathManager.Init()
 
-	opts := fuse.FuseOpt{}
+	opts := fuse.Opt{}
 	opts.Getattr = &getattr
 	opts.Opendir = &opendir
 	opts.Readdir = &readdir

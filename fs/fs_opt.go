@@ -37,7 +37,7 @@ func recoverError(res *int32) {
 	}
 }
 
-var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, result int32) {
+var getattr = func(req fuse.Req, nodeid uint64) (fsStat *fuse.FileStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -45,7 +45,7 @@ var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, resu
 
 	logger.Trace.Printf("getattr: path[%s] \n", path)
 
-	fsStat = &fuse.FuseStat{}
+	fsStat = &fuse.FileStat{}
 
 	if path == "/" {
 
@@ -71,12 +71,12 @@ var getattr = func(req fuse.FuseReq, nodeid uint64) (fsStat *fuse.FuseStat, resu
 	return fsStat, result
 }
 
-var opendir = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
+var opendir = func(req fuse.Req, nodeid uint64, fi *fuse.FileInfo) int32 {
 
 	return errno.SUCCESS
 }
 
-var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (fileList []fuse.FuseDirent, result int32) {
+var readdir = func(req fuse.Req, nodeid uint64, size uint32, offset uint64, fi fuse.FileInfo) (fileList []fuse.Dirent, result int32) {
 
 	defer recoverError(&result)
 
@@ -84,7 +84,7 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 
 	logger.Trace.Printf("readdir: path[%s] \n", path)
 
-	fileList = make([]fuse.FuseDirent, 0)
+	fileList = make([]fuse.Dirent, 0)
 
 	// 记录fileList中的文件数量
 	fileCount := uint32(0)
@@ -96,10 +96,10 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 	fileReqOffset := offset / 32
 
 	if fileReqOffset < 2 {
-		current := fuse.FuseDirent{NameLen: uint32(len(".")), Ino: nodeid, Off: 0, Name: "."}
-		prev := fuse.FuseDirent{NameLen: uint32(len("..")), Ino: nodeid, Off: 0, Name: ".."}
+		current := fuse.Dirent{NameLen: uint32(len(".")), Ino: nodeid, Off: 0, Name: "."}
+		prev := fuse.Dirent{NameLen: uint32(len("..")), Ino: nodeid, Off: 0, Name: ".."}
 
-		fileList = make([]fuse.FuseDirent, 2)
+		fileList = make([]fuse.Dirent, 2)
 
 		fileList[0] = current
 		fileList[1] = prev
@@ -150,7 +150,7 @@ var readdir = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, 
 
 }
 
-var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) (result int32) {
+var release = func(req fuse.Req, nodeid uint64, fi fuse.FileInfo) (result int32) {
 
 	defer recoverError(&result)
 
@@ -164,7 +164,7 @@ var release = func(req fuse.FuseReq, nodeid uint64, fi fuse.FuseFileInfo) (resul
 	return result
 }
 
-var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.FuseStat, result int32) {
+var lookup = func(req fuse.Req, parentId uint64, name string) (fsStat *fuse.FileStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -191,7 +191,7 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.
 
 	file.AdjustNormal()
 
-	fsStat = &fuse.FuseStat{}
+	fsStat = &fuse.FileStat{}
 
 	fsStat.Nodeid = uint64(file.StIno)
 	file.WriteToStat(&fsStat.Stat)
@@ -205,12 +205,12 @@ var lookup = func(req fuse.FuseReq, parentId uint64, name string) (fsStat *fuse.
 	return fsStat, result
 }
 
-var open = func(req fuse.FuseReq, nodeid uint64, fi *fuse.FuseFileInfo) int32 {
+var open = func(req fuse.Req, nodeid uint64, fi *fuse.FileInfo) int32 {
 
 	return errno.SUCCESS
 }
 
-var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi fuse.FuseFileInfo) (content []byte, result int32) {
+var read = func(req fuse.Req, nodeid uint64, size uint32, offset uint64, fi fuse.FileInfo) (content []byte, result int32) {
 
 	defer recoverError(&result)
 
@@ -234,7 +234,7 @@ var read = func(req fuse.FuseReq, nodeid uint64, size uint32, offset uint64, fi 
 	return content, result
 }
 
-var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (stat *fuse.FuseStat, result int32) {
+var mkdir = func(req fuse.Req, parentid uint64, name string, mode uint32) (stat *fuse.FileStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -257,7 +257,7 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (s
 		panic(err)
 	}
 
-	stat = &fuse.FuseStat{}
+	stat = &fuse.FileStat{}
 
 	file.AdjustNormal()
 	file.WriteToStat(&stat.Stat)
@@ -273,7 +273,7 @@ var mkdir = func(req fuse.FuseReq, parentid uint64, name string, mode uint32) (s
 	return stat, errno.SUCCESS
 }
 
-var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, fi *fuse.FuseFileInfo) (stat *fuse.FuseStat, result int32) {
+var create = func(req fuse.Req, parentid uint64, name string, mode uint32, fi *fuse.FileInfo) (stat *fuse.FileStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -302,7 +302,7 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 		panic(err)
 	}
 
-	stat = &fuse.FuseStat{}
+	stat = &fuse.FileStat{}
 
 	file.AdjustNormal()
 	file.WriteToStat(&stat.Stat)
@@ -319,7 +319,7 @@ var create = func(req fuse.FuseReq, parentid uint64, name string, mode uint32, f
 	return stat, errno.SUCCESS
 }
 
-var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet uint32) (result int32) {
+var setattr = func(req fuse.Req, nodeid uint64, attr fuse.FileStat, toSet uint32) (result int32) {
 
 	defer recoverError(&result)
 
@@ -372,7 +372,7 @@ var setattr = func(req fuse.FuseReq, nodeid uint64, attr fuse.FuseStat, toSet ui
 	return errno.SUCCESS
 }
 
-var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi fuse.FuseFileInfo) (size uint32, result int32) {
+var write = func(req fuse.Req, nodeid uint64, buf []byte, offset uint64, fi fuse.FileInfo) (size uint32, result int32) {
 
 	defer recoverError(&result)
 
@@ -414,7 +414,7 @@ var write = func(req fuse.FuseReq, nodeid uint64, buf []byte, offset uint64, fi 
 	return size, errno.SUCCESS
 }
 
-func _rmFileOrDir(req fuse.FuseReq, parentid uint64, name string) (result int32) {
+func _rmFileOrDir(req fuse.Req, parentid uint64, name string) (result int32) {
 	defer recoverError(&result)
 
 	parentPath := pathManager.Get(parentid)
@@ -442,17 +442,17 @@ func _rmFileOrDir(req fuse.FuseReq, parentid uint64, name string) (result int32)
 }
 
 // 删除文件函数
-var unlink = func(req fuse.FuseReq, parentid uint64, name string) (result int32) {
+var unlink = func(req fuse.Req, parentid uint64, name string) (result int32) {
 	return _rmFileOrDir(req, parentid, name)
 }
 
 // 删除文件夹函数
-var rmdir = func(req fuse.FuseReq, parentid uint64, name string) (result int32) {
+var rmdir = func(req fuse.Req, parentid uint64, name string) (result int32) {
 	return _rmFileOrDir(req, parentid, name)
 }
 
 // 重命名文件
-var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid uint64, newname string) (result int32) {
+var rename = func(req fuse.Req, parentid uint64, name string, newparentid uint64, newname string) (result int32) {
 
 	defer recoverError(&result)
 
@@ -495,7 +495,7 @@ var rename = func(req fuse.FuseReq, parentid uint64, name string, newparentid ui
 }
 
 // 设置文件额外属性
-var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, flags uint32) (result int32) {
+var setxattr = func(req fuse.Req, nodeid uint64, name string, value string, flags uint32) (result int32) {
 
 	defer recoverError(&result)
 
@@ -530,7 +530,7 @@ var setxattr = func(req fuse.FuseReq, nodeid uint64, name string, value string, 
 }
 
 // 获取指定名字的文件额外属性值
-var getxattr = func(req fuse.FuseReq, nodeid uint64, name string, size uint32) (value string, result int32) {
+var getxattr = func(req fuse.Req, nodeid uint64, name string, size uint32) (value string, result int32) {
 
 	defer recoverError(&result)
 
@@ -550,7 +550,7 @@ var getxattr = func(req fuse.FuseReq, nodeid uint64, name string, size uint32) (
 	return value, errno.SUCCESS
 }
 
-var listxattr = func(req fuse.FuseReq, nodeid uint64, size uint32) (list string, result int32) {
+var listxattr = func(req fuse.Req, nodeid uint64, size uint32) (list string, result int32) {
 	defer recoverError(&result)
 
 	filepath := pathManager.Get(nodeid)
@@ -580,7 +580,7 @@ var listxattr = func(req fuse.FuseReq, nodeid uint64, size uint32) (list string,
 	return list, errno.SUCCESS
 }
 
-var removexattr = func(req fuse.FuseReq, nodeid uint64, name string) (result int32) {
+var removexattr = func(req fuse.Req, nodeid uint64, name string) (result int32) {
 	defer recoverError(&result)
 
 	filepath := pathManager.Get(nodeid)
@@ -596,7 +596,7 @@ var removexattr = func(req fuse.FuseReq, nodeid uint64, name string) (result int
 }
 
 // hadoopControler不支持
-var symlink = func(req fuse.FuseReq, parentid uint64, link string, name string) (stat *fuse.FuseStat, result int32) {
+var symlink = func(req fuse.Req, parentid uint64, link string, name string) (stat *fuse.FileStat, result int32) {
 
 	defer recoverError(&result)
 
@@ -618,7 +618,7 @@ var symlink = func(req fuse.FuseReq, parentid uint64, link string, name string) 
 	}
 	symlinkFile.AdjustNormal()
 
-	stat = &fuse.FuseStat{}
+	stat = &fuse.FileStat{}
 	symlinkFile.WriteToStat(&stat.Stat)
 	stat.Nodeid = uint64(symlinkFile.StIno)
 	stat.Generation = 1

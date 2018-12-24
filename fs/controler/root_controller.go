@@ -19,7 +19,7 @@ type RootController struct {
 	rootFile *model.FileModel
 }
 
-func (rc *RootController) GetRoot(req fuse.FuseReq) model.FileModel {
+func (rc *RootController) GetRoot(req fuse.Req) model.FileModel {
 	if rc.rootFile != nil {
 		return *rc.rootFile
 	} else {
