@@ -117,14 +117,15 @@ var readdir = func(req fuse.Req, nodeid uint64, size uint32, offset uint64, fi f
 
 		logger.Trace.Printf("%+v, remain[%d], err[%s]\n", remoteFiles, remain, err)
 
-		for i, _ := range remoteFiles {
+		for _, val := range remoteFiles {
 
+			file := val
 			fileOffset++
 
 			if fileOffset > fileReqOffset {
-				remoteFiles[i].AdjustNormal()
+				file.AdjustNormal()
 
-				fileList = append(fileList, remoteFiles[i].ToFuseDirent())
+				fileList = append(fileList, file.ToFuseDirent())
 
 				fileCount++
 
