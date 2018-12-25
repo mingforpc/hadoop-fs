@@ -9,16 +9,21 @@ import (
 	"github.com/mingforpc/fuse-go/fuse"
 )
 
-const TYPE_FILE = syscall.S_IFREG
-const TYPE_DIR = syscall.S_IFDIR
-const TYPE_SYMLINK = syscall.S_IFLNK
-
+// 文件类型
 const (
-	HADOOP_DIR     = "DIRECTORY"
-	HADOOP_FILE    = "FILE"
-	HADOOP_SYMLINK = "SYMLINK"
+	TypeFile    = syscall.S_IFREG
+	TypeDir     = syscall.S_IFDIR
+	TypeSymlink = syscall.S_IFLNK
 )
 
+// Hadoop中的文件类型
+const (
+	HadoopDir     = "DIRECTORY"
+	HadoopFile    = "FILE"
+	HadoopSymlink = "SYMLINK"
+)
+
+// FileModel 保存文件信息的类
 type FileModel struct {
 	Name      string `json:"pathSuffix"`
 	FileType  int
@@ -27,7 +32,7 @@ type FileModel struct {
 	StDev     uint32
 	StRdev    uint32
 	StNlink   uint32
-	StUid     uint
+	StUID     uint
 	StGid     uint
 	StSize    int64 `json:"length"`
 	StAtime   int64 `json:"accessTime"`
@@ -43,12 +48,13 @@ type FileModel struct {
 	ChildrenNum      int    `json:"childrenNum"`
 }
 
+// WriteToStat 将FileModel中的信息写入stat中
 func (file *FileModel) WriteToStat(stat *syscall.Stat_t) {
 
 	stat.Ino = uint64(file.StIno)
 	stat.Mode = uint32(file.FileType) | uint32(file.StMode)
 
-	stat.Uid = uint32(file.StUid)
+	stat.Uid = uint32(file.StUID)
 	stat.Gid = uint32(file.StGid)
 
 	stat.Nlink = uint64(file.StNlink)
@@ -65,24 +71,24 @@ func (file *FileModel) WriteToStat(stat *syscall.Stat_t) {
 	stat.Ctim = syscall.NsecToTimespec(file.StCtime)
 }
 
-// 当FileModel是由 WebHDFS 接口获取时，需要调用该接口对部分属性进行转换
+// AdjustNormal 当FileModel是由 WebHDFS 接口获取时，需要调用该接口对部分属性进行转换
 func (file *FileModel) AdjustNormal() {
 
 	file.StMtime = util.MsToNs(file.StMtime)
 
 	switch file.HadoopType {
-	case HADOOP_DIR:
-		file.FileType = TYPE_DIR
+	case HadoopDir:
+		file.FileType = TypeDir
 		file.StSize = 4096
 		file.StNlink = 2
 		if file.StAtime == 0 {
 			file.StAtime = file.StMtime
 		}
-	case HADOOP_FILE:
-		file.FileType = TYPE_FILE
+	case HadoopFile:
+		file.FileType = TypeFile
 		file.StNlink = 1
-	case HADOOP_SYMLINK:
-		file.FileType = TYPE_SYMLINK
+	case HadoopSymlink:
+		file.FileType = TypeSymlink
 	}
 
 	file.StCtime = file.StMtime
@@ -97,7 +103,7 @@ func (file *FileModel) AdjustNormal() {
 		fileUser, _ = user.Lookup("nobody")
 	}
 	uid, _ := strconv.Atoi(fileUser.Uid)
-	file.StUid = uint(uid)
+	file.StUID = uint(uid)
 
 	fileGroup, err := user.LookupGroup(file.HadoopOwner)
 	if err != nil {
@@ -107,6 +113,7 @@ func (file *FileModel) AdjustNormal() {
 	file.StGid = uint(gid)
 }
 
+// ToFuseDirent 将FileModel导出为一个fuse.Dirent的实例中
 func (file *FileModel) ToFuseDirent() fuse.Dirent {
 	ent := fuse.Dirent{}
 

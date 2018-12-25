@@ -11,27 +11,29 @@ import (
 	"strconv"
 )
 
+// op code
 const (
-	LISTSTATUS_BATCH = "LISTSTATUS_BATCH"
-	GETFILESTATUS    = "GETFILESTATUS"
-	READ             = "OPEN"
-	MKDIRS           = "MKDIRS"
-	CREATE           = "CREATE"
-	SETTIMES         = "SETTIMES"
-	APPEND           = "APPEND"
-	TRUNCATE         = "TRUNCATE"
-	DELETE           = "DELETE"
-	SETPERMISSION    = "SETPERMISSION"
-	RENAME           = "RENAME"
-	CREATESYMLINK    = "CREATESYMLINK"
-	SETXATTR         = "SETXATTR"
-	GETXATTRS        = "GETXATTRS"
-	REMOVEXATTR      = "REMOVEXATTR"
+	opListStatusBatch = "LISTSTATUS_BATCH"
+	opGetFileStatus   = "GETFILESTATUS"
+	opRead            = "OPEN"
+	opMkDir           = "MKDIRS"
+	opCreate          = "CREATE"
+	opSetTimes        = "SETTIMES"
+	opAppend          = "APPEND"
+	opTruncate        = "TRUNCATE"
+	opDelete          = "DELETE"
+	opSetPermission   = "SETPERMISSION"
+	opRename          = "RENAME"
+	opCreateSymlink   = "CREATESYMLINK"
+	opSetXattr        = "SETXATTR"
+	opGetXattr        = "GETXATTRS"
+	opRemoveXattr     = "REMOVEXATTR"
 )
 
-var _default_buffersize = 4096
-var _default_length = 4096
+var defaultBufferSize = 4096
+var defaultLength = 4096
 
+// HadoopController 与Hadoop WebHDFS 交互的控制类
 type HadoopController struct {
 	isSSL bool
 	host  string
@@ -44,6 +46,7 @@ type HadoopController struct {
 	inited bool
 }
 
+// Init 初始化函数
 func (hadoop *HadoopController) Init(ssl bool, host string, port int, username string) {
 
 	hadoop.isSSL = ssl
@@ -72,7 +75,7 @@ func (hadoop *HadoopController) urlJoin(path, op string) string {
 	return url
 }
 
-// 列出目录下的文件
+// List 列出目录下的文件
 func (hadoop *HadoopController) List(path, startAfter string) (fileList []model.FileModel, remain int, err error) {
 
 	defer func() {
@@ -81,7 +84,7 @@ func (hadoop *HadoopController) List(path, startAfter string) (fileList []model.
 		}
 	}()
 
-	url := hadoop.urlJoin(path, LISTSTATUS_BATCH)
+	url := hadoop.urlJoin(path, opListStatusBatch)
 
 	if startAfter != "" {
 		url = urlAddParam(url, "startAfter", startAfter)
@@ -107,7 +110,7 @@ func (hadoop *HadoopController) List(path, startAfter string) (fileList []model.
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		default:
 			panic(exception)
 		}
@@ -135,12 +138,12 @@ func recoverError(exception *error) {
 	}
 }
 
-// 获取文件信息
+// GetFileStatus 获取文件信息
 func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileModel, err error) {
 
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filePath, GETFILESTATUS)
+	url := hadoop.urlJoin(filePath, opGetFileStatus)
 
 	resp, err := http.Get(url)
 
@@ -162,7 +165,7 @@ func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileM
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		default:
 			panic(exception)
 		}
@@ -184,15 +187,15 @@ func (hadoop *HadoopController) GetFileStatus(filePath string) (file model.FileM
 func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint32, buffersize int) (content []byte, err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filePath, READ)
+	url := hadoop.urlJoin(filePath, opRead)
 
 	url = urlAddParam(url, "offset", strconv.FormatInt(int64(offset), 10))
 
 	if length <= 0 {
-		length = uint32(_default_length)
+		length = uint32(defaultLength)
 	}
 	if buffersize <= 0 {
-		buffersize = _default_buffersize
+		buffersize = defaultBufferSize
 	}
 	url = urlAddParam(url, "length", strconv.FormatInt(int64(length), 10))
 	url = urlAddParam(url, "buffersize", strconv.Itoa(buffersize))
@@ -217,9 +220,9 @@ func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		case 403:
-			panic(herr.EOF)
+			panic(herr.ErrEOF)
 		default:
 			panic(exception)
 		}
@@ -231,11 +234,11 @@ func (hadoop *HadoopController) Read(filePath string, offset uint64, length uint
 	return content, err
 }
 
-// 创建目录
+// MakeDir 创建目录
 func (hadoop *HadoopController) MakeDir(pathname, permission string) (result bool, err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(pathname, MKDIRS)
+	url := hadoop.urlJoin(pathname, opMkDir)
 
 	if permission != "" {
 		url = urlAddParam(url, "permission", permission)
@@ -266,7 +269,7 @@ func (hadoop *HadoopController) MakeDir(pathname, permission string) (result boo
 		}
 		switch resp.StatusCode {
 		case 403:
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -282,11 +285,11 @@ func (hadoop *HadoopController) MakeDir(pathname, permission string) (result boo
 	return booleanRes.Boolean, err
 }
 
-// 创建文件
+// Create 创建文件
 func (hadoop *HadoopController) Create(filepath, permission string) (err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, CREATE)
+	url := hadoop.urlJoin(filepath, opCreate)
 
 	if permission != "" {
 		url = urlAddParam(url, "permission", permission)
@@ -318,9 +321,9 @@ func (hadoop *HadoopController) Create(filepath, permission string) (err error) 
 		}
 		switch exception.Error() {
 		case "AccessControlException":
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		case "FileAlreadyExistsException":
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		default:
 			panic(exception)
 		}
@@ -329,11 +332,11 @@ func (hadoop *HadoopController) Create(filepath, permission string) (err error) 
 	return err
 }
 
-// 设置文件Mtime和Atime，-1表示不变
+// ModificationTime 设置文件Mtime和Atime，-1表示不变
 func (hadoop *HadoopController) ModificationTime(filepath string, mtime, atime int64) (err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, SETTIMES)
+	url := hadoop.urlJoin(filepath, opSetTimes)
 
 	url = urlAddParam(url, "modificationtime", strconv.FormatInt(mtime, 10))
 	url = urlAddParam(url, "accesstime", strconv.FormatInt(atime, 10))
@@ -363,7 +366,7 @@ func (hadoop *HadoopController) ModificationTime(filepath string, mtime, atime i
 		}
 		switch exception.Error() {
 		case "AccessControlException":
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -372,11 +375,11 @@ func (hadoop *HadoopController) ModificationTime(filepath string, mtime, atime i
 	return err
 }
 
-// 追加文件内容
+// AppendFile 追加文件内容
 func (hadoop *HadoopController) AppendFile(filepath string, content []byte) (err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, APPEND)
+	url := hadoop.urlJoin(filepath, opAppend)
 
 	contentBuf := bytes.NewBuffer(content)
 
@@ -399,7 +402,7 @@ func (hadoop *HadoopController) AppendFile(filepath string, content []byte) (err
 		}
 		switch exception.Error() {
 		case "AccessControlException":
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -408,11 +411,11 @@ func (hadoop *HadoopController) AppendFile(filepath string, content []byte) (err
 	return err
 }
 
-// Truncate 文件
+// TruncateFile Truncate 文件
 func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (result bool, err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, TRUNCATE)
+	url := hadoop.urlJoin(filepath, opTruncate)
 	url = urlAddParam(url, "newlength", strconv.FormatInt(newlength, 10))
 
 	resp, err := http.Post(url, "application/json", nil)
@@ -435,9 +438,9 @@ func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		case 403:
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -453,12 +456,12 @@ func (hadoop *HadoopController) TruncateFile(filepath string, newlength int64) (
 	return booleanRes.Boolean, err
 }
 
-// 删除文件或者目录
+// Delete 删除文件或者目录
 func (hadoop *HadoopController) Delete(filepath string) (result bool, err error) {
 
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, DELETE)
+	url := hadoop.urlJoin(filepath, opDelete)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 
@@ -486,9 +489,9 @@ func (hadoop *HadoopController) Delete(filepath string) (result bool, err error)
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		case 403:
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -504,11 +507,11 @@ func (hadoop *HadoopController) Delete(filepath string) (result bool, err error)
 	return booleanRes.Boolean, err
 }
 
-// 设置文件权限
+// SetPermission 设置文件权限
 func (hadoop *HadoopController) SetPermission(filepath, permission string) (err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, SETPERMISSION)
+	url := hadoop.urlJoin(filepath, opSetPermission)
 	url = urlAddParam(url, "permission", permission)
 
 	req, err := http.NewRequest("PUT", url, nil)
@@ -537,9 +540,9 @@ func (hadoop *HadoopController) SetPermission(filepath, permission string) (err 
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		case 403:
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -548,11 +551,11 @@ func (hadoop *HadoopController) SetPermission(filepath, permission string) (err 
 	return err
 }
 
-// 文件重命名
+// Rename 文件重命名
 func (hadoop *HadoopController) Rename(src, dest string) (result bool, err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(src, RENAME)
+	url := hadoop.urlJoin(src, opRename)
 	url = urlAddParam(url, "destination", dest)
 
 	req, err := http.NewRequest("PUT", url, nil)
@@ -581,9 +584,9 @@ func (hadoop *HadoopController) Rename(src, dest string) (result bool, err error
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		case 403:
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -599,11 +602,11 @@ func (hadoop *HadoopController) Rename(src, dest string) (result bool, err error
 	return booleanRes.Boolean, err
 }
 
-// 创建软连接
+// CreateSymlink 创建软连接
 func (hadoop *HadoopController) CreateSymlink(src, link string) (err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(src, CREATESYMLINK)
+	url := hadoop.urlJoin(src, opCreateSymlink)
 	url = urlAddParam(url, "destination", link)
 
 	req, err := http.NewRequest("PUT", url, nil)
@@ -632,9 +635,9 @@ func (hadoop *HadoopController) CreateSymlink(src, link string) (err error) {
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		case 403:
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		default:
 			panic(exception)
 		}
@@ -643,11 +646,11 @@ func (hadoop *HadoopController) CreateSymlink(src, link string) (err error) {
 	return err
 }
 
-// setxattr
+// Setxattr setxattr
 func (hadoop *HadoopController) Setxattr(filepath, name, value, flag string) (err error) {
 	defer recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, SETXATTR)
+	url := hadoop.urlJoin(filepath, opSetXattr)
 	url = urlAddParam(url, "xattr.name", name)
 	url = urlAddParam(url, "xattr.value", value)
 	url = urlAddParam(url, "flag", flag)
@@ -678,12 +681,12 @@ func (hadoop *HadoopController) Setxattr(filepath, name, value, flag string) (er
 		}
 		switch resp.StatusCode {
 		case 400:
-			panic(herr.ENOTSUP)
+			panic(herr.ErrNotsup)
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		case 403:
 			// xattr已经存在
-			panic(herr.EEXIST)
+			panic(herr.ErrExist)
 		default:
 			panic(exception)
 		}
@@ -692,11 +695,11 @@ func (hadoop *HadoopController) Setxattr(filepath, name, value, flag string) (er
 	return err
 }
 
-// getxattr
+// Getxattr getxattr
 func (hadoop *HadoopController) Getxattr(filepath, name string) (value string, err error) {
 	recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, GETXATTRS)
+	url := hadoop.urlJoin(filepath, opGetXattr)
 	url = urlAddParam(url, "xattr.name", name)
 	url = urlAddParam(url, "encoding", "text")
 
@@ -720,7 +723,7 @@ func (hadoop *HadoopController) Getxattr(filepath, name string) (value string, e
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		default:
 			panic(exception)
 		}
@@ -739,11 +742,11 @@ func (hadoop *HadoopController) Getxattr(filepath, name string) (value string, e
 	return value, err
 }
 
-// lisstxattr
+// Listxattr lisstxattr
 func (hadoop *HadoopController) Listxattr(filepath string) (attrs []Xattr, err error) {
 	recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, GETXATTRS)
+	url := hadoop.urlJoin(filepath, opGetXattr)
 	url = urlAddParam(url, "encoding", "text")
 
 	resp, err := http.Get(url)
@@ -766,7 +769,7 @@ func (hadoop *HadoopController) Listxattr(filepath string) (attrs []Xattr, err e
 		}
 		switch resp.StatusCode {
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		default:
 			panic(exception)
 		}
@@ -784,11 +787,11 @@ func (hadoop *HadoopController) Listxattr(filepath string) (attrs []Xattr, err e
 	return attrs, err
 }
 
-// removexattr
+// Removexattr removexattr
 func (hadoop *HadoopController) Removexattr(filepath, name string) (err error) {
 	recoverError(&err)
 
-	url := hadoop.urlJoin(filepath, REMOVEXATTR)
+	url := hadoop.urlJoin(filepath, opRemoveXattr)
 	url = urlAddParam(url, "xattr.name", name)
 
 	req, err := http.NewRequest("PUT", url, nil)
@@ -817,11 +820,11 @@ func (hadoop *HadoopController) Removexattr(filepath, name string) (err error) {
 		}
 		switch resp.StatusCode {
 		case 400:
-			panic(herr.ENOTSUP)
+			panic(herr.ErrNotsup)
 		case 403:
-			panic(herr.ENOATTR)
+			panic(herr.ErrNoAttr)
 		case 404:
-			panic(herr.NO_FOUND)
+			panic(herr.ErrNoFound)
 		default:
 			panic(exception)
 		}

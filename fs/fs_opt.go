@@ -16,19 +16,19 @@ import (
 func recoverError(res *int32) {
 	if err := recover(); err != nil {
 		switch err {
-		case herr.NO_FOUND:
+		case herr.ErrNoFound:
 			*res = errno.ENOENT
-		case herr.EEXIST:
+		case herr.ErrExist:
 			*res = errno.EEXIST
-		case herr.EACCES:
+		case herr.ErrAccess:
 			*res = errno.ENOENT
-		case herr.EAGAIN:
+		case herr.ErrAgain:
 			*res = errno.EAGAIN
-		case herr.ENOTSUP:
+		case herr.ErrNotsup:
 			*res = errno.ENOTSUP
-		case herr.ERANGE:
+		case herr.ErrRange:
 			*res = errno.ERANGE
-		case herr.ENOATTR:
+		case herr.ErrNoAttr:
 			*res = errno.ENOATTR
 		default:
 			*res = errno.ENOSYS
@@ -177,7 +177,7 @@ var lookup = func(req fuse.Req, parentId uint64, name string) (fsStat *fuse.File
 
 	if notExistManager.IsNotExist(filePath) == false {
 		// 文件不存在
-		panic(herr.NO_FOUND)
+		panic(herr.ErrNoFound)
 		// return errno.ENOENT
 	}
 
@@ -187,7 +187,7 @@ var lookup = func(req fuse.Req, parentId uint64, name string) (fsStat *fuse.File
 		// 不存在的文件会缓存 notExistManager 中的秒数
 		notExistManager.Set(filePath, notExistManager.NegativeTimeout)
 		// return errno.ENOENT
-		panic(herr.NO_FOUND)
+		panic(herr.ErrNoFound)
 	}
 
 	file.AdjustNormal()
@@ -226,7 +226,7 @@ var read = func(req fuse.Req, nodeid uint64, size uint32, offset uint64, fi fuse
 
 	content, err := hadoopControler.Read(path, offset, size, 0)
 
-	if err != nil && err != herr.EOF {
+	if err != nil && err != herr.ErrEOF {
 		// TODO: 出错
 		panic(err)
 	}
@@ -249,7 +249,7 @@ var mkdir = func(req fuse.Req, parentid uint64, name string, mode uint32) (stat 
 	if err != nil {
 		panic(err)
 	} else if !success {
-		panic(herr.EACCES)
+		panic(herr.ErrAccess)
 	}
 
 	file, err := hadoopControler.GetFileStatus(filePath)
@@ -400,7 +400,7 @@ var write = func(req fuse.Req, nodeid uint64, buf []byte, offset uint64, fi fuse
 		if err != nil {
 			panic(err)
 		} else if !success {
-			panic(herr.EACCES)
+			panic(herr.ErrAccess)
 		} else {
 			err = hadoopControler.AppendFile(filepath, buf)
 		}
@@ -434,7 +434,7 @@ func _rmFileOrDir(req fuse.Req, parentid uint64, name string) (result int32) {
 	if err != nil {
 		panic(err)
 	} else if !success {
-		panic(herr.EACCES)
+		panic(herr.ErrAccess)
 	}
 
 	pathManager.Del(uint64(file.StIno))
@@ -477,7 +477,7 @@ var rename = func(req fuse.Req, parentid uint64, name string, newparentid uint64
 	if err != nil {
 		panic(err)
 	} else if !success {
-		panic(herr.EACCES)
+		panic(herr.ErrAccess)
 	}
 
 	// 获取Rename后文件的信息
@@ -516,7 +516,7 @@ var setxattr = func(req fuse.Req, nodeid uint64, name string, value string, flag
 	err := hadoopControler.Setxattr(filepath, name, value, strFlag)
 
 	if err != nil {
-		if err == herr.EEXIST {
+		if err == herr.ErrExist {
 			// Xattr已经存在要用replace
 			err = hadoopControler.Setxattr(filepath, name, value, "REPLACE")
 			if err != nil {
@@ -545,7 +545,7 @@ var getxattr = func(req fuse.Req, nodeid uint64, name string, size uint32) (valu
 	}
 
 	if size > 0 && uint32(len(value)) > size {
-		panic(herr.ERANGE)
+		panic(herr.ErrRange)
 	}
 
 	return value, errno.SUCCESS
@@ -575,7 +575,7 @@ var listxattr = func(req fuse.Req, nodeid uint64, size uint32) (list string, res
 	list = buf.String()
 
 	if size > 0 && uint32(len(list)) > size {
-		panic(herr.ERANGE)
+		panic(herr.ErrRange)
 	}
 
 	return list, errno.SUCCESS
