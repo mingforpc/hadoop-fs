@@ -68,8 +68,6 @@ func Service(cg config.Config) {
 	go exitSign(signalChan, se)
 
 	se.FuseLoop()
-
-	se.Close()
 }
 
 func umount(se *fuse.Session) {
@@ -87,5 +85,4 @@ func exitSign(signalChan chan os.Signal, se *fuse.Session) {
 
 	umount(se)
 	se.Close()
-
 }
