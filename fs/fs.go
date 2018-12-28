@@ -15,7 +15,7 @@ import (
 
 var pathManager = util.FusePathManager{}
 var hadoopControler controler.HadoopController
-var notExistManager util.NotExistManager
+var notExistManager = util.NotExistManager{}
 
 // Service 服务开始
 func Service(cg config.Config) {
@@ -23,9 +23,7 @@ func Service(cg config.Config) {
 	hadoopControler = controler.HadoopController{}
 	hadoopControler.Init(false, cg.Hadoop.Host, cg.Hadoop.Port, cg.Hadoop.Username)
 
-	notExistManager = util.NotExistManager{}
-	notExistManager.Init()
-	notExistManager.NegativeTimeout = cg.NotExistCacheTimeout
+	notExistManager.Init(cg.NotExistCacheTimeout)
 
 	pathManager.Init()
 
