@@ -43,8 +43,6 @@ var getattr = func(req fuse.Req, nodeid uint64) (fsStat *fuse.FileStat, result i
 
 	path := pathManager.Get(nodeid)
 
-	logger.Trace.Printf("getattr: path[%s] \n", path)
-
 	fsStat = &fuse.FileStat{}
 
 	if path == "/" {
@@ -82,8 +80,6 @@ var readdir = func(req fuse.Req, nodeid uint64, size uint32, offset uint64, fi f
 
 	path := pathManager.Get(nodeid)
 
-	logger.Trace.Printf("readdir: path[%s] \n", path)
-
 	fileList = make([]fuse.Dirent, 0)
 
 	// 记录fileList中的文件数量
@@ -113,9 +109,7 @@ var readdir = func(req fuse.Req, nodeid uint64, size uint32, offset uint64, fi f
 	fileOffset := uint64(2)
 
 	for {
-		remoteFiles, remain, err := hadoopControler.List(path, lastPathSuffix)
-
-		logger.Trace.Printf("%+v, remain[%d], err[%s]\n", remoteFiles, remain, err)
+		remoteFiles, remain, _ := hadoopControler.List(path, lastPathSuffix)
 
 		for _, val := range remoteFiles {
 
@@ -170,9 +164,6 @@ var lookup = func(req fuse.Req, parentId uint64, name string) (fsStat *fuse.File
 	defer recoverError(&result)
 
 	parentPath := pathManager.Get(parentId)
-
-	logger.Trace.Printf("parentId[%d], parentPath[%s], name[%s]\n", parentId, parentPath, name)
-
 	filePath := util.MergePath(parentPath, name)
 
 	if notExistManager.IsNotExist(filePath) == false {

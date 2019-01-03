@@ -68,12 +68,17 @@ func Service(cg config.Config) {
 	go exitSign(signalChan, se)
 
 	se.FuseLoop()
+
+	se.Close()
+
 }
 
 func umount(se *fuse.Session) {
 
 	err := mount.Unmount(se.Mountpoint)
-	logger.Error.Printf("umount failed [%s], Please umount folder manually! \n", err)
+	if err != nil {
+		logger.Error.Printf(":umount failed [%s], Please umount folder manually! \n", err)
+	}
 
 }
 
@@ -84,5 +89,5 @@ func exitSign(signalChan chan os.Signal, se *fuse.Session) {
 	logger.Info.Printf("Receive Sign[%s]\n", sign)
 
 	umount(se)
-	se.Close()
+
 }

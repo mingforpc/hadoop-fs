@@ -116,8 +116,6 @@ func (hadoop *HadoopController) List(path, startAfter string) (fileList []model.
 		}
 	}
 
-	logger.Trace.Println(buf.String())
-
 	statusBatch := ListStatusBatch{}
 	err = json.Unmarshal(buf.Bytes(), &statusBatch)
 
