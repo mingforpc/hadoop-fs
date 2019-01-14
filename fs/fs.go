@@ -56,7 +56,7 @@ func Service(cg config.Config) {
 	se.Debug = cg.Debug
 	se.FuseConfig.AttrTimeout = cg.Attrtimeout
 
-	err := mount.Mount(se)
+	err := mount.Mount(se, nil)
 
 	if err != nil {
 		logger.Error.Println(err)
